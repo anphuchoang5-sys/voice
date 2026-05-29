@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { EventConfirmCard } from "../src/components/EventConfirmCard";
 import { RecordButton } from "../src/components/RecordButton";
 import { WaveformAnimation } from "../src/components/WaveformAnimation";
 import { useRecording } from "../src/hooks/useRecording";
+import { parseIntent } from "../src/services/intent.service";
 import { transcribeAudio } from "../src/services/stt.service";
-import type { RecordingStatus } from "../src/types";
+import type { CalendarEvent, RecordingStatus } from "../src/types";
 
 const TRANSCRIPT_PLACEHOLDER = "点击录音按钮，说出要加入日历的事情。";
 
@@ -28,9 +30,13 @@ function formatDuration(durationMillis: number): string {
 export default function RecordScreen(): React.JSX.Element {
   const [transcript, setTranscript] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [isParsingIntent, setIsParsingIntent] = useState<boolean>(false);
   const [transcriptionError, setTranscriptionError] = useState<string | null>(
     null,
   );
+  const [intentError, setIntentError] = useState<string | null>(null);
+  const [parsedEvent, setParsedEvent] = useState<CalendarEvent | null>(null);
+  const [confirmedEvent, setConfirmedEvent] = useState<CalendarEvent | null>(null);
   const lastProcessedAudioUriRef = useRef<string | null>(null);
 
   const {
@@ -43,7 +49,7 @@ export default function RecordScreen(): React.JSX.Element {
     stopRecording,
   } = useRecording();
 
-  const status: RecordingStatus = isTranscribing
+  const status: RecordingStatus = isTranscribing || isParsingIntent
     ? "processing"
     : isRecording
       ? "recording"
@@ -51,16 +57,30 @@ export default function RecordScreen(): React.JSX.Element {
 
   const processAudio = useCallback(async (nextAudioUri: string): Promise<void> => {
     setIsTranscribing(true);
+    setIsParsingIntent(false);
     setTranscriptionError(null);
+    setIntentError(null);
+    setParsedEvent(null);
+    setConfirmedEvent(null);
 
     try {
       const text = await transcribeAudio(nextAudioUri);
       setTranscript(text);
+      setIsTranscribing(false);
+      setIsParsingIntent(true);
+
+      const event = await parseIntent(text);
+      if (event) {
+        setParsedEvent(event);
+      } else {
+        setIntentError("未能识别事件信息，请重新描述");
+      }
     } catch {
       setTranscript("");
       setTranscriptionError("识别失败，请重试");
     } finally {
       setIsTranscribing(false);
+      setIsParsingIntent(false);
     }
   }, []);
 
@@ -69,6 +89,7 @@ export default function RecordScreen(): React.JSX.Element {
       !audioUri ||
       isRecording ||
       isTranscribing ||
+      isParsingIntent ||
       lastProcessedAudioUriRef.current === audioUri
     ) {
       return;
@@ -76,10 +97,10 @@ export default function RecordScreen(): React.JSX.Element {
 
     lastProcessedAudioUriRef.current = audioUri;
     void processAudio(audioUri);
-  }, [audioUri, isRecording, isTranscribing, processAudio]);
+  }, [audioUri, isParsingIntent, isRecording, isTranscribing, processAudio]);
 
   const handleToggleRecording = (): void => {
-    if (isTranscribing) {
+    if (isTranscribing || isParsingIntent) {
       return;
     }
 
@@ -87,6 +108,9 @@ export default function RecordScreen(): React.JSX.Element {
       lastProcessedAudioUriRef.current = null;
       setTranscript("");
       setTranscriptionError(null);
+      setIntentError(null);
+      setParsedEvent(null);
+      setConfirmedEvent(null);
       void startRecording();
       return;
     }
@@ -94,8 +118,22 @@ export default function RecordScreen(): React.JSX.Element {
     void stopRecording();
   };
 
+  const handleCancelEvent = (): void => {
+    setParsedEvent(null);
+  };
+
+  const handleConfirmEvent = (event: CalendarEvent): void => {
+    setConfirmedEvent(event);
+    setParsedEvent(null);
+  };
+
   const displayText =
-    transcriptionError ?? recordingError ?? transcript ?? TRANSCRIPT_PLACEHOLDER;
+    transcriptionError ??
+    recordingError ??
+    intentError ??
+    (confirmedEvent ? `已确认事件：${confirmedEvent.title}` : null) ??
+    transcript ??
+    TRANSCRIPT_PLACEHOLDER;
 
   return (
     <SafeAreaView className="flex-1 bg-night">
@@ -131,6 +169,8 @@ export default function RecordScreen(): React.JSX.Element {
           <Text className="mt-8 text-center text-sm leading-6 text-slate-400">
             {status === "recording"
               ? "再次点击停止录音，静音 1.5 秒也会自动停止"
+              : status === "processing"
+                ? "正在把语音整理成日历事件"
               : "长按桌面图标选择语音记录，也会直达这个页面"}
           </Text>
         </View>
@@ -138,17 +178,32 @@ export default function RecordScreen(): React.JSX.Element {
         <View className="min-h-[156px] rounded-[28px] border border-white/10 bg-white/5 p-5">
           <View className="flex-row items-center justify-between">
             <Text className="text-base font-semibold text-white">转写文字</Text>
-            {isTranscribing ? <ActivityIndicator color="#A78BFA" /> : null}
+            {isTranscribing || isParsingIntent ? (
+              <ActivityIndicator color="#A78BFA" />
+            ) : null}
           </View>
           <Text
             className={`mt-4 text-base leading-7 ${
-              transcriptionError || recordingError ? "text-red-200" : "text-slate-200"
+              transcriptionError || recordingError || intentError
+                ? "text-red-200"
+                : "text-slate-200"
             }`}
           >
-            {isTranscribing ? "识别中..." : displayText}
+            {isTranscribing
+              ? "识别中..."
+              : isParsingIntent
+                ? "正在解析事件信息..."
+                : displayText}
           </Text>
         </View>
       </View>
+
+      <EventConfirmCard
+        event={parsedEvent}
+        onCancel={handleCancelEvent}
+        onConfirm={handleConfirmEvent}
+        visible={parsedEvent !== null}
+      />
     </SafeAreaView>
   );
 }

@@ -35,7 +35,8 @@
           "microphonePermission": "允许 VoiceCalendar 使用麦克风录制语音日历内容。"
         }
       ],
-      "expo-quick-actions"
+      "expo-quick-actions",
+      "expo-secure-store"
     ]
   }
 }

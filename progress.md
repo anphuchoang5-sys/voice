@@ -8,7 +8,7 @@
 |------|------|----------|----------|------|
 | 阶段一：项目基础 + 录音 UI | 已完成 | 2026-05-29 | `a8a24cb 完成阶段一项目基础与录音界面` | 已停在检查点 |
 | 阶段二：录音 + 语音转文字 | 代码完成，待实机/API 验证 | 2026-05-29 | 已提交：实现阶段二录音与语音转写 | Groq Key 仍为占位 |
-| 阶段三：意图解析 | 未开始 | - | - | - |
+| 阶段三：意图解析 | 代码完成，待 DeepSeek API 验证 | 2026-05-29 | 已提交：实现阶段三意图解析 | DeepSeek Key 仍为占位 |
 | 阶段四：写入日历 + 提醒 | 未开始 | - | - | - |
 | 阶段五：App 内日历视图 | 未开始 | - | - | - |
 | 阶段六：完善 + 边缘情况 | 未开始 | - | - | - |
@@ -42,7 +42,7 @@
 
 ## 下一步
 
-等待用户确认后进入阶段二：录音 + Groq Whisper 语音转文字。
+等待用户确认后进入下一阶段。
 
 ## 阶段二记录
 
@@ -69,3 +69,29 @@
 
 - `.env` 中 `EXPO_PUBLIC_GROQ_API_KEY` 仍为占位值，无法进行真实 Groq API 转写测试。
 - 当前环境没有连接 Android 真机或模拟器，静音检测和麦克风权限弹窗尚未实测。
+
+## 阶段三记录
+
+### 阶段三前置修复
+
+- 已将 `src/constants/config.ts` 中 `REQUEST_TIMEOUT_MS` 从 `30_000` 改为 `15_000`。
+- 已运行 `npx expo install expo-haptics expo-secure-store`。
+
+### 已完成
+
+- 新增 `CalendarEvent` 类型。
+- 新增 DeepSeek 配置：`DEEPSEEK_API_URL`、`DEEPSEEK_MODEL`、`DEEPSEEK_API_KEY`。
+- 新增 `src/constants/prompts.ts`，按当天日期和中文星期生成系统提示词。
+- 新增 `src/services/intent.service.ts`，使用 `fetch` 调用 DeepSeek API，temperature 为 `0.1`，异常统一返回 `null`。
+- 新增 `src/components/EventConfirmCard.tsx`，实现底部滑入确认卡，支持编辑标题、日期、时间、提醒和全天状态。
+- 更新 `app/record.tsx`，STT 完成后自动调用 `parseIntent`，成功时弹出确认卡，失败时显示“未能识别事件信息，请重新描述”。
+
+### 验证结果
+
+- `npm run typecheck`：通过。
+- `npx expo export --platform android`：通过。
+- `npm ls --depth=0`：通过，已安装 `expo-haptics` 与 `expo-secure-store`。
+
+### 当前阻塞
+
+- `.env` 中 `EXPO_PUBLIC_DEEPSEEK_API_KEY` 仍为占位值，五条 DeepSeek 解析测试无法调用真实 API；按当前实现会返回 `null`。
