@@ -8,7 +8,7 @@
 |------|------|----------|----------|------|
 | 阶段一：项目基础 + 录音 UI | 已完成 | 2026-05-29 | `a8a24cb 完成阶段一项目基础与录音界面` | 已停在检查点 |
 | 阶段二：录音 + 语音转文字 | 代码完成，待实机/API 验证 | 2026-05-29 | 已提交：实现阶段二录音与语音转写 | Groq Key 仍为占位 |
-| 阶段三：意图解析 | 代码完成，待 DeepSeek API 验证 | 2026-05-29 | 已提交：实现阶段三意图解析 | DeepSeek Key 仍为占位 |
+| 阶段三：意图解析 | 已完成 | 2026-05-29 | 已提交：实现阶段三意图解析 | DeepSeek 临时实测通过，Key 未写入文件 |
 | 阶段四：写入日历 + 提醒 | 未开始 | - | - | - |
 | 阶段五：App 内日历视图 | 未开始 | - | - | - |
 | 阶段六：完善 + 边缘情况 | 未开始 | - | - | - |
@@ -92,6 +92,18 @@
 - `npx expo export --platform android`：通过。
 - `npm ls --depth=0`：通过，已安装 `expo-haptics` 与 `expo-secure-store`。
 
-### 当前阻塞
+### DeepSeek 实测结果
 
-- `.env` 中 `EXPO_PUBLIC_DEEPSEEK_API_KEY` 仍为占位值，五条 DeepSeek 解析测试无法调用真实 API；按当前实现会返回 `null`。
+- 使用用户临时提供的 DeepSeek API Key 完成 5 条测试，Key 未写入 `.env` 或任何项目文件。
+- 平均响应时间约 `855ms`。
+- 5 条测试均满足阶段三要求：
+  - “明天下午三点开产品会” -> `{"title":"产品会","date":"2026-05-30","time":"15:00","duration":60,"reminder_min":15,"allDay":false}`
+  - “后天上午九点半牙医预约，提前一小时提醒我” -> `{"title":"牙医预约","date":"2026-05-31","time":"09:30","duration":60,"reminder_min":60,"allDay":false}`
+  - “下周一下午两点跟客户视频会议” -> `{"title":"跟客户视频会议","date":"2026-06-01","time":"14:00","duration":60,"reminder_min":15,"allDay":false}`
+  - “今晚记得买菜” -> `{"title":"买菜","date":"2026-05-29","time":"20:00","duration":60,"reminder_min":15,"allDay":false}`
+  - “帮我提醒一下” -> `null`
+
+### Prompt 调整
+
+- 首轮实测中，第 5 条 DeepSeek 原始返回为字段全为 `null` 的对象。
+- 已加强 prompt：信息不足时必须只返回字面量 `null`，不要返回包含 `null` 字段的对象。

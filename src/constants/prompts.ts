@@ -36,5 +36,6 @@ export function createIntentSystemPrompt(today: Date = new Date()): string {
   "allDay": false
 }
 
-只返回 JSON，不要其他文字。`;
+如果标题、日期或事件动作信息不足，必须只返回 null，不要返回包含 null 字段的对象。
+只返回 JSON，不要 Markdown 代码块，不要其他文字。`;
 }

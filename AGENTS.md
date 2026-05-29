@@ -169,7 +169,7 @@ src/constants/
 |------|------|---------|---------|
 | 阶段一：基础 + UI | ✅ 已完成 | 2026-05-29 | Expo SDK 51 初始化、依赖安装、NativeWind/expo-router/quick actions 配置、录音 UI |
 | 阶段二：录音 + STT | ⚠️ 代码完成，待实机/API 验证 | 2026-05-29 | useRecording、Groq STT service、录音页转写链路 |
-| 阶段三：意图解析 | ⚠️ 代码完成，待 DeepSeek API 验证 | 2026-05-29 | CalendarEvent、prompt、DeepSeek fetch service、EventConfirmCard、录音页解析链路 |
+| 阶段三：意图解析 | ✅ 已完成 | 2026-05-29 | CalendarEvent、prompt、DeepSeek fetch service、EventConfirmCard、录音页解析链路；DeepSeek 临时实测通过 |
 | 阶段四：日历写入 | ⬜ 未开始 | — | — |
 | 阶段五：App 日历视图 | ⬜ 未开始 | — | — |
 | 阶段六：完善 | ⬜ 未开始 | — | — |
@@ -248,18 +248,18 @@ src/constants/
 ```
 === 阶段三完成报告 ===
 1. 5条测试用例各自的解析结果（原文 → JSON）
-- "明天下午三点开产品会" → null（未执行真实 API：EXPO_PUBLIC_DEEPSEEK_API_KEY 仍为占位值）
-- "后天上午九点半牙医预约，提前一小时提醒我" → null（未执行真实 API：EXPO_PUBLIC_DEEPSEEK_API_KEY 仍为占位值）
-- "下周一下午两点跟客户视频会议" → null（未执行真实 API：EXPO_PUBLIC_DEEPSEEK_API_KEY 仍为占位值）
-- "今晚记得买菜" → null（未执行真实 API：EXPO_PUBLIC_DEEPSEEK_API_KEY 仍为占位值）
-- "帮我提醒一下" → null（符合预期方向，但同样未执行真实 API）
+- "明天下午三点开产品会" → {"title":"产品会","date":"2026-05-30","time":"15:00","duration":60,"reminder_min":15,"allDay":false}
+- "后天上午九点半牙医预约，提前一小时提醒我" → {"title":"牙医预约","date":"2026-05-31","time":"09:30","duration":60,"reminder_min":60,"allDay":false}
+- "下周一下午两点跟客户视频会议" → {"title":"跟客户视频会议","date":"2026-06-01","time":"14:00","duration":60,"reminder_min":15,"allDay":false}
+- "今晚记得买菜" → {"title":"买菜","date":"2026-05-29","time":"20:00","duration":60,"reminder_min":15,"allDay":false}
+- "帮我提醒一下" → null
 
 2. DeepSeek API 平均响应时间
-- 未测得：当前 .env 中 DeepSeek API Key 仍是 your_deepseek_api_key_here。
+- 约 855ms（5 条用例平均值）。测试使用用户临时提供的 Key，未写入 .env 或项目文件。
 
 3. prompt 是否需要调整（说明原因）
-- 暂不调整。已按 PROJECT_BRIEF.md 阶段三原文实现，并注入 YYYY-MM-DD 与中文星期几。
-- 需要等真实 API 返回后再根据 5 条测试结果判断是否要加强“信息不足返回 null”和“今晚/模糊时间”的规则。
+- 已微调。首轮实测中，第 5 条 DeepSeek 原始返回了“字段全为 null 的对象”，不是字面量 null。
+- 已加强 prompt：信息不足时必须只返回 null，不要返回包含 null 字段的对象；复测后第 5 条返回 raw=null。
 
 4. EventConfirmCard UI 描述
 - 底部半透明遮罩 + 深色圆角 Sheet，从底部用 react-native-reanimated 滑入。
@@ -270,7 +270,7 @@ src/constants/
 - 阶段三前置修复：REQUEST_TIMEOUT_MS 已从 30_000 改为 15_000。
 - 已安装 expo-haptics 和 expo-secure-store，为后续震动反馈和安全存储做准备。
 - parseIntent 使用 fetch 调用 DeepSeek，不依赖任何第三方 SDK；异常、Key 缺失、非 JSON、字段不合法都会返回 null。
-- 当前最大阻塞是缺少有效 DeepSeek API Key，无法完成真实测试用例解析。
+- DeepSeek 真实测试通过；PowerShell 首轮测试出现中文编码错位，改用显式 UTF-8 管道 + Node fetch 后结果可信。
 ```
 
 ### 阶段四报告
