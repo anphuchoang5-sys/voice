@@ -168,7 +168,7 @@ src/constants/
 | 阶段 | 状态 | 完成时间 | 主要产出 |
 |------|------|---------|---------|
 | 阶段一：基础 + UI | ✅ 已完成 | 2026-05-29 | Expo SDK 51 初始化、依赖安装、NativeWind/expo-router/quick actions 配置、录音 UI |
-| 阶段二：录音 + STT | ⬜ 未开始 | — | — |
+| 阶段二：录音 + STT | ⚠️ 代码完成，待实机/API 验证 | 2026-05-29 | useRecording、Groq STT service、录音页转写链路 |
 | 阶段三：意图解析 | ⬜ 未开始 | — | — |
 | 阶段四：日历写入 | ⬜ 未开始 | — | — |
 | 阶段五：App 日历视图 | ⬜ 未开始 | — | — |
@@ -219,7 +219,29 @@ src/constants/
 
 ### 阶段二报告
 ```
-（待填入）
+=== 阶段二完成报告 ===
+1. useRecording hook 最终实现要点
+- 使用 expo-av 请求麦克风权限，配置录音 AudioMode，并使用 HIGH_QUALITY m4a 预设录音。
+- 返回 isRecording、startRecording、stopRecording、audioUri，并额外提供 durationMillis、metering、permissionStatus、errorMessage。
+- 每 200ms 读取 RecordingStatus；录音超过 2 秒后，如果音量持续 1.5 秒低于 -50 dB，则自动 stopRecording。
+- 组件卸载时会停止并卸载录音对象，避免录音资源悬挂。
+
+2. STT 服务调用成功的测试文字（至少3条）
+- 当前无法完成真实 API 测试：.env 中 EXPO_PUBLIC_GROQ_API_KEY 仍为占位值。
+- transcribeAudio 已实现 Groq Whisper 调用：POST https://api.groq.com/openai/v1/audio/transcriptions，model=whisper-large-v3，language=zh。
+
+3. 静音检测是否正常工作
+- 代码已实现：durationMillis >= 2000 且 metering <= -50 dB 持续 1500ms 时自动停止。
+- 尚未真机验证：当前环境没有 Android 真机/模拟器录音输入。
+
+4. Groq API 响应时间大约多少毫秒
+- 未测得：缺少有效 GROQ_API_KEY 和真机录音样本。
+
+5. 遇到的问题和解决方式
+- deepseek SDK 无关：已执行 npm uninstall deepseek，后续 DeepSeek API 直接 fetch。
+- npm uninstall 需要联网解析 peer dependency：按权限流程重试后成功。
+- Android adaptive icon 背景色已改为主紫 #6C3CE1。
+- 录音页已接入真实录音和 STT loading/error 状态；真实 API 与静音效果等待 Key 和真机验证。
 ```
 
 ### 阶段三报告
