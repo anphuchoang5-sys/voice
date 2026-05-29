@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { Link } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,8 +9,18 @@ import { EventConfirmCard } from "../src/components/EventConfirmCard";
 import { RecordButton } from "../src/components/RecordButton";
 import { WaveformAnimation } from "../src/components/WaveformAnimation";
 import { useRecording } from "../src/hooks/useRecording";
+import {
+  createEvent,
+  getOrCreateVoiceCalendar,
+  requestCalendarPermission,
+} from "../src/services/calendar.service";
 import { parseIntent } from "../src/services/intent.service";
+import {
+  requestNotificationPermission,
+  scheduleReminder,
+} from "../src/services/notification.service";
 import { transcribeAudio } from "../src/services/stt.service";
+import { useCalendarStore } from "../src/stores/calendar.store";
 import type { CalendarEvent, RecordingStatus } from "../src/types";
 
 const TRANSCRIPT_PLACEHOLDER = "点击录音按钮，说出要加入日历的事情。";
@@ -31,13 +42,16 @@ export default function RecordScreen(): React.JSX.Element {
   const [transcript, setTranscript] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [isParsingIntent, setIsParsingIntent] = useState<boolean>(false);
+  const [isSavingEvent, setIsSavingEvent] = useState<boolean>(false);
   const [transcriptionError, setTranscriptionError] = useState<string | null>(
     null,
   );
   const [intentError, setIntentError] = useState<string | null>(null);
+  const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
   const [parsedEvent, setParsedEvent] = useState<CalendarEvent | null>(null);
   const [confirmedEvent, setConfirmedEvent] = useState<CalendarEvent | null>(null);
   const lastProcessedAudioUriRef = useRef<string | null>(null);
+  const addEvent = useCalendarStore((state) => state.addEvent);
 
   const {
     isRecording,
@@ -49,7 +63,7 @@ export default function RecordScreen(): React.JSX.Element {
     stopRecording,
   } = useRecording();
 
-  const status: RecordingStatus = isTranscribing || isParsingIntent
+  const status: RecordingStatus = isTranscribing || isParsingIntent || isSavingEvent
     ? "processing"
     : isRecording
       ? "recording"
@@ -60,6 +74,7 @@ export default function RecordScreen(): React.JSX.Element {
     setIsParsingIntent(false);
     setTranscriptionError(null);
     setIntentError(null);
+    setCalendarMessage(null);
     setParsedEvent(null);
     setConfirmedEvent(null);
 
@@ -100,7 +115,7 @@ export default function RecordScreen(): React.JSX.Element {
   }, [audioUri, isParsingIntent, isRecording, isTranscribing, processAudio]);
 
   const handleToggleRecording = (): void => {
-    if (isTranscribing || isParsingIntent) {
+    if (isTranscribing || isParsingIntent || isSavingEvent) {
       return;
     }
 
@@ -109,6 +124,7 @@ export default function RecordScreen(): React.JSX.Element {
       setTranscript("");
       setTranscriptionError(null);
       setIntentError(null);
+      setCalendarMessage(null);
       setParsedEvent(null);
       setConfirmedEvent(null);
       void startRecording();
@@ -123,17 +139,67 @@ export default function RecordScreen(): React.JSX.Element {
   };
 
   const handleConfirmEvent = (event: CalendarEvent): void => {
-    setConfirmedEvent(event);
-    setParsedEvent(null);
+    void saveEventToCalendar(event);
+  };
+
+  const saveEventToCalendar = async (event: CalendarEvent): Promise<void> => {
+    setIsSavingEvent(true);
+    setCalendarMessage("正在写入系统日历...");
+
+    try {
+      const hasCalendarPermission = await requestCalendarPermission();
+      if (!hasCalendarPermission) {
+        setCalendarMessage("未获得日历权限，无法写入系统日历");
+        setParsedEvent(null);
+        return;
+      }
+
+      await getOrCreateVoiceCalendar();
+      const eventId = await createEvent(event);
+      const savedEvent: CalendarEvent & { id: string } = {
+        ...event,
+        id: eventId,
+      };
+      let reminderMessage = "";
+
+      const hasNotificationPermission = await requestNotificationPermission();
+      if (hasNotificationPermission) {
+        try {
+          await scheduleReminder(event, eventId);
+        } catch {
+          reminderMessage = "（提醒设置失败）";
+        }
+      } else {
+        reminderMessage = "（未开启通知权限，未设置提醒）";
+      }
+
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      addEvent(savedEvent);
+      setConfirmedEvent(savedEvent);
+      setParsedEvent(null);
+      setIntentError(null);
+      setTranscriptionError(null);
+      setCalendarMessage(`✅ 已加入日历${reminderMessage}`);
+    } catch {
+      setCalendarMessage("写入日历失败，请检查权限后重试");
+    } finally {
+      setIsSavingEvent(false);
+    }
   };
 
   const displayText =
     transcriptionError ??
     recordingError ??
     intentError ??
-    (confirmedEvent ? `已确认事件：${confirmedEvent.title}` : null) ??
+    calendarMessage ??
+    (confirmedEvent ? `已加入日历：${confirmedEvent.title}` : null) ??
     transcript ??
     TRANSCRIPT_PLACEHOLDER;
+
+  const hasDisplayError =
+    Boolean(transcriptionError ?? recordingError ?? intentError) ||
+    calendarMessage?.includes("失败") === true ||
+    calendarMessage?.includes("未获得") === true;
 
   return (
     <SafeAreaView className="flex-1 bg-night">
@@ -178,13 +244,13 @@ export default function RecordScreen(): React.JSX.Element {
         <View className="min-h-[156px] rounded-[28px] border border-white/10 bg-white/5 p-5">
           <View className="flex-row items-center justify-between">
             <Text className="text-base font-semibold text-white">转写文字</Text>
-            {isTranscribing || isParsingIntent ? (
+            {isTranscribing || isParsingIntent || isSavingEvent ? (
               <ActivityIndicator color="#A78BFA" />
             ) : null}
           </View>
           <Text
             className={`mt-4 text-base leading-7 ${
-              transcriptionError || recordingError || intentError
+              hasDisplayError
                 ? "text-red-200"
                 : "text-slate-200"
             }`}
@@ -193,6 +259,8 @@ export default function RecordScreen(): React.JSX.Element {
               ? "识别中..."
               : isParsingIntent
                 ? "正在解析事件信息..."
+                : isSavingEvent
+                  ? "正在写入系统日历..."
                 : displayText}
           </Text>
         </View>

@@ -9,7 +9,7 @@
 | 阶段一：项目基础 + 录音 UI | 已完成 | 2026-05-29 | `a8a24cb 完成阶段一项目基础与录音界面` | 已停在检查点 |
 | 阶段二：录音 + 语音转文字 | 代码完成，待实机/API 验证 | 2026-05-29 | 已提交：实现阶段二录音与语音转写 | Groq Key 仍为占位 |
 | 阶段三：意图解析 | 已完成 | 2026-05-29 | 已提交：实现阶段三意图解析 | DeepSeek 临时实测通过，Key 未写入文件 |
-| 阶段四：写入日历 + 提醒 | 未开始 | - | - | - |
+| 阶段四：写入日历 + 提醒 | 代码完成，待实机验证 | 2026-05-29 | 本次提交：完成阶段四日历写入与提醒 | 日历/通知权限需 Android 真机确认 |
 | 阶段五：App 内日历视图 | 未开始 | - | - | - |
 | 阶段六：完善 + 边缘情况 | 未开始 | - | - | - |
 | 阶段七：打包 + 演示准备 | 未开始 | - | - | - |
@@ -31,6 +31,7 @@
 ### 验证结果
 
 - `npm run typecheck`：通过。
+- `npx expo export --platform android`：通过。
 - `npx expo install --check`：通过。
 - `npx expo export --platform android`：通过。
 
@@ -107,3 +108,24 @@
 
 - 首轮实测中，第 5 条 DeepSeek 原始返回为字段全为 `null` 的对象。
 - 已加强 prompt：信息不足时必须只返回字面量 `null`，不要返回包含 `null` 字段的对象。
+
+## 阶段四记录
+
+### 已完成
+
+- 更新 `EventConfirmCard`：新增 summary / editing 双模式，summary 下显示只读字段与取消/编辑/确认按钮，editing 下支持编辑标题、日期、时间、提醒分钟和全天开关。
+- 修复确认卡关闭动画：新增 `isMounted` 控制，`visible` 变 false 后先播放滑出动画，再卸载组件。
+- 更新 `app.json`，加入 `expo-calendar` 与 `expo-notifications` 插件。
+- 新增 `src/services/calendar.service.ts`，封装日历权限、创建“语音日历”、写入/删除系统事件、按月读取事件。
+- 新增 `src/services/notification.service.ts`，封装通知权限、Android 通知频道、按事件提醒时间调度/取消通知。
+- 新增 `src/stores/calendar.store.ts`，用 Zustand 维护 App 内事件列表。
+- 更新 `app/record.tsx`，确认事件后请求权限、写入系统日历、调度提醒、触发震动反馈并同步到 store。
+
+### 验证结果
+
+- `npm run typecheck`：通过。
+
+### 待实机验证
+
+- 当前桌面环境无法弹出 Android 日历/通知权限，也无法打开系统日历截图确认。
+- 通知触发逻辑已实现：若提醒时间已过，会改为 60 秒后触发，便于真机快速验证。
