@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "VoiceCalendar",
-    "slug": "VoiceCalendar",
+    "slug": "voicecalendar",
     "version": "1.0.0",
     "scheme": "voicecalendar",
     "orientation": "portrait",
@@ -16,7 +16,15 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.seven.voicecalendar",
+      "package": "com.voicecalendar.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#6C3CE1",
         "foregroundImage": "./assets/android-icon-foreground.png",
