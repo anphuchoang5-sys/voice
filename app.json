@@ -23,7 +23,8 @@
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#6C3CE1",
@@ -48,6 +49,15 @@
       "expo-secure-store",
       "expo-calendar",
       "expo-notifications"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "f0845a82-a5ad-4ff2-9a5f-84cb52143bce"
+      }
+    },
+    "owner": "fengyy"
   }
 }
