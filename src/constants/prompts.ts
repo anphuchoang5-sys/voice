@@ -1,3 +1,5 @@
+import { formatDate } from "../utils/date";
+
 const WEEKDAY_NAMES = [
   "星期日",
   "星期一",
@@ -8,19 +10,12 @@ const WEEKDAY_NAMES = [
   "星期六",
 ] as const;
 
-export function formatDateForPrompt(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 export function getChineseWeekday(date: Date): string {
   return WEEKDAY_NAMES[date.getDay()];
 }
 
 export function createIntentSystemPrompt(today: Date = new Date()): string {
-  const todayText = formatDateForPrompt(today);
+  const todayText = formatDate(today);
   const weekdayText = getChineseWeekday(today);
 
   return `你是一个日历助手，从用户语音文字中提取事件信息。

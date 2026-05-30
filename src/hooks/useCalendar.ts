@@ -64,7 +64,11 @@ export function useCalendar(year: number, month: number): UseCalendarResult {
   const deleteCalendarEvent = useCallback(
     async (id: string): Promise<void> => {
       await deleteSystemEvent(id);
-      await cancelReminder(id);
+      try {
+        await cancelReminder(id);
+      } catch {
+        // 取消通知失败不阻止删除流程
+      }
       removeEvent(id);
     },
     [removeEvent],
