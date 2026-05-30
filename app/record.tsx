@@ -11,7 +11,6 @@ import { WaveformAnimation } from "../src/components/WaveformAnimation";
 import { useRecording } from "../src/hooks/useRecording";
 import {
   createEvent,
-  getOrCreateVoiceCalendar,
   requestCalendarPermission,
 } from "../src/services/calendar.service";
 import { parseIntent } from "../src/services/intent.service";
@@ -154,7 +153,6 @@ export default function RecordScreen(): React.JSX.Element {
         return;
       }
 
-      await getOrCreateVoiceCalendar();
       const eventId = await createEvent(event);
       const savedEvent: CalendarEvent & { id: string } = {
         ...event,
@@ -181,7 +179,7 @@ export default function RecordScreen(): React.JSX.Element {
       setTranscriptionError(null);
       setCalendarMessage(`✅ 已加入日历${reminderMessage}`);
     } catch {
-      setCalendarMessage("写入日历失败，请检查权限后重试");
+      setCalendarMessage("写入日历失败，请重试");
     } finally {
       setIsSavingEvent(false);
     }

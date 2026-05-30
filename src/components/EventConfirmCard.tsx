@@ -17,14 +17,15 @@ import Animated, {
 
 import type { CalendarEvent } from "../types";
 
+type ConfirmCardMode = "summary" | "editing";
+
 type EventConfirmCardProps = {
   event: CalendarEvent | null;
+  initialMode?: ConfirmCardMode;
   visible: boolean;
   onCancel: () => void;
   onConfirm: (event: CalendarEvent) => void;
 };
-
-type ConfirmCardMode = "summary" | "editing";
 
 type EditableEventFields = {
   title: string;
@@ -63,6 +64,7 @@ function buildCalendarEvent(
 
 export function EventConfirmCard({
   event,
+  initialMode = "summary",
   visible,
   onCancel,
   onConfirm,
@@ -80,11 +82,11 @@ export function EventConfirmCard({
     if (event) {
       setCurrentEvent(event);
       setFields(createEditableFields(event));
-      setMode("summary");
+      setMode(initialMode);
       contentOpacity.value = 1;
       contentTranslateY.value = 0;
     }
-  }, [contentOpacity, contentTranslateY, event]);
+  }, [contentOpacity, contentTranslateY, event, initialMode]);
 
   const finishUnmount = useCallback((): void => {
     setIsMounted(false);
