@@ -58,7 +58,8 @@ export function useVoice(): UseVoiceResult {
         return;
       }
 
-      setErrorMessage("语音识别失败，请重试");
+      const code = event.error?.code ?? "?";
+      setErrorMessage(`语音识别失败（错误码 ${code}），请重试`);
     };
 
     return (): void => {
@@ -70,10 +71,15 @@ export function useVoice(): UseVoiceResult {
     resetVoice();
 
     try {
+      const available = await Voice.isAvailable();
+      if (!available) {
+        setErrorMessage("当前设备不支持语音识别服务");
+        return;
+      }
       await Voice.start("zh-CN");
     } catch {
       setVoiceState("idle");
-      setErrorMessage("语音识别失败，请重试");
+      setErrorMessage("语音识别启动失败，请重试");
     }
   };
 

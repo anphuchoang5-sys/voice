@@ -27,8 +27,8 @@ const TRANSCRIPT_PLACEHOLDER = "点击录音按钮，说出要加入日历的事
 
 const STATUS_HINTS: Record<RecordingStatus, string> = {
   idle: "准备就绪",
-  recording: "正在听你说话",
-  processing: "正在整理，请稍候",
+  recording: "仔细聆听中",
+  processing: "思考中",
 };
 
 export default function RecordScreen(): React.JSX.Element {
@@ -172,7 +172,7 @@ export default function RecordScreen(): React.JSX.Element {
 
   const transcriptText =
     voiceState === "listening"
-      ? partialText || "正在听你说话..."
+      ? partialText || "正在仔细聆听..."
       : voiceState === "processing"
         ? "正在整理语音..."
         : appState === "parsing"
@@ -207,11 +207,11 @@ export default function RecordScreen(): React.JSX.Element {
             <RecordButton status={status} onPress={handleToggleRecording} />
           </View>
           <Text className="mt-6 text-center text-lg font-semibold text-white">
-            {voiceState === "listening" ? "实时识别中" : "原生语音识别"}
+            {voiceState === "listening" ? "正在聆听" : "语音记录"}
           </Text>
           <Text className="mt-8 text-center text-sm leading-6 text-slate-400">
             {voiceState === "listening"
-              ? "说完后系统会自动结束，也可以再次点击停止"
+              ? "环境安静约 2 秒会自动停止，也可以再次点击停止"
               : status === "processing"
                 ? "正在把语音整理成日历事件"
                 : "长按桌面图标选择语音记录，也会直达这个页面"}
