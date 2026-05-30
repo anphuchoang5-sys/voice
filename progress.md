@@ -11,7 +11,7 @@
 | 阶段三：意图解析 | 已完成 | 2026-05-29 | 已提交：实现阶段三意图解析 | DeepSeek 临时实测通过，Key 未写入文件 |
 | 阶段四：写入日历 + 提醒 | 代码完成，待实机验证 | 2026-05-29 | 本次提交：完成阶段四日历写入与提醒 | 日历/通知权限需 Android 真机确认 |
 | 阶段五：App 内日历视图 | 代码完成，待实机验证 | 2026-05-30 | 本次提交：完成阶段五 App 内日历视图 | 左滑删除和系统同步需 Android 真机确认 |
-| 阶段六：完善 + 边缘情况 | 未开始 | - | - | - |
+| 阶段六：原生语音识别切换 | 代码完成，待 dev APK 验证 | 2026-05-30 | 本次提交：切换阶段六原生语音识别 | 已从 Groq STT 切到 Android SpeechRecognizer |
 | 阶段七：打包 + 演示准备 | 未开始 | - | - | - |
 
 ## 阶段一记录
@@ -155,3 +155,26 @@
 
 - 当前桌面环境无法实际验证系统日历读取、左滑手势触感和 Android 通知取消结果。
 - 事件编辑目前通过“删除旧系统事件 + 新建更新后事件”的方式保持系统日历同步。
+
+## 阶段六记录
+
+### 已完成
+
+- 安装 `@react-native-voice/voice`，并执行 `npx expo prebuild --platform android --clean` 生成 Android 原生工程。
+- 在 AndroidManifest 中确认 `RECORD_AUDIO` 权限，并补充 `android.speech.RecognitionService` query。
+- 删除 Groq STT 服务和旧 `expo-av` 录音 hook。
+- 新增 `src/hooks/useVoice.ts`，封装 Android 原生语音识别、实时 partial 文本、final 文本和错误处理。
+- 更新 `app/record.tsx`，改为实时语音识别，finalText 自动调用 DeepSeek 意图解析，保留写入日历流程。
+- 更新 `WaveformAnimation`，改为只依赖 `isActive` 播放循环脉冲。
+- 清理 Groq 配置、`.env.example` 和本地 `.env` 中的 Groq Key 行。
+- 修复 Q8：事件详情页不再展示系统 ID。
+- 修复 Q9：左滑删除增加二次确认。
+
+### 验证结果
+
+- `npm run typecheck`：通过。
+- 运行代码搜索确认已无 Groq STT 依赖。
+
+### 待实机验证
+
+- 需要构建 dev APK 验证 Google ASR 可用性、中文识别效果、静音自动结束和实时 partial 文本表现。

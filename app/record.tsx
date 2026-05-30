@@ -8,7 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { EventConfirmCard } from "../src/components/EventConfirmCard";
 import { RecordButton } from "../src/components/RecordButton";
 import { WaveformAnimation } from "../src/components/WaveformAnimation";
-import { useRecording } from "../src/hooks/useRecording";
+import { useVoice } from "../src/hooks/useVoice";
 import {
   createEvent,
   requestCalendarPermission,
@@ -18,71 +18,51 @@ import {
   requestNotificationPermission,
   scheduleReminder,
 } from "../src/services/notification.service";
-import { transcribeAudio } from "../src/services/stt.service";
 import { useCalendarStore } from "../src/stores/calendar.store";
 import type { CalendarEvent, RecordingStatus } from "../src/types";
+
+type RecordAppState = "idle" | "parsing" | "saving";
 
 const TRANSCRIPT_PLACEHOLDER = "点击录音按钮，说出要加入日历的事情。";
 
 const STATUS_HINTS: Record<RecordingStatus, string> = {
   idle: "准备就绪",
-  recording: "正在记录你的语音",
-  processing: "识别中，请稍候",
+  recording: "正在听你说话",
+  processing: "正在整理，请稍候",
 };
 
-function formatDuration(durationMillis: number): string {
-  const totalSeconds = Math.max(0, Math.floor(durationMillis / 1000));
-  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
-  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${seconds}`;
-}
-
 export default function RecordScreen(): React.JSX.Element {
-  const [transcript, setTranscript] = useState<string>("");
-  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
-  const [isParsingIntent, setIsParsingIntent] = useState<boolean>(false);
-  const [isSavingEvent, setIsSavingEvent] = useState<boolean>(false);
-  const [transcriptionError, setTranscriptionError] = useState<string | null>(
-    null,
-  );
+  const [appState, setAppState] = useState<RecordAppState>("idle");
   const [intentError, setIntentError] = useState<string | null>(null);
   const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
   const [parsedEvent, setParsedEvent] = useState<CalendarEvent | null>(null);
   const [confirmedEvent, setConfirmedEvent] = useState<CalendarEvent | null>(null);
-  const lastProcessedAudioUriRef = useRef<string | null>(null);
+  const lastParsedTextRef = useRef<string | null>(null);
   const addEvent = useCalendarStore((state) => state.addEvent);
 
   const {
-    isRecording,
-    audioUri,
-    durationMillis,
-    metering,
-    errorMessage: recordingError,
-    startRecording,
-    stopRecording,
-  } = useRecording();
+    voiceState,
+    partialText,
+    finalText,
+    errorMessage: voiceError,
+    startListening,
+    stopListening,
+  } = useVoice();
 
-  const status: RecordingStatus = isTranscribing || isParsingIntent || isSavingEvent
-    ? "processing"
-    : isRecording
-      ? "recording"
-      : "idle";
+  const status: RecordingStatus =
+    appState !== "idle" || voiceState === "processing"
+      ? "processing"
+      : voiceState === "listening"
+        ? "recording"
+        : "idle";
 
-  const processAudio = useCallback(async (nextAudioUri: string): Promise<void> => {
-    setIsTranscribing(true);
-    setIsParsingIntent(false);
-    setTranscriptionError(null);
+  const parseFinalText = useCallback(async (text: string): Promise<void> => {
+    setAppState("parsing");
     setIntentError(null);
     setCalendarMessage(null);
     setParsedEvent(null);
-    setConfirmedEvent(null);
 
     try {
-      const text = await transcribeAudio(nextAudioUri);
-      setTranscript(text);
-      setIsTranscribing(false);
-      setIsParsingIntent(true);
-
       const event = await parseIntent(text);
       if (event) {
         setParsedEvent(event);
@@ -90,47 +70,39 @@ export default function RecordScreen(): React.JSX.Element {
         setIntentError("未能识别事件信息，请重新描述");
       }
     } catch {
-      setTranscript("");
-      setTranscriptionError("识别失败，请重试");
+      setIntentError("未能识别事件信息，请重新描述");
     } finally {
-      setIsTranscribing(false);
-      setIsParsingIntent(false);
+      setAppState("idle");
     }
   }, []);
 
   useEffect((): void => {
+    const normalizedFinalText = finalText?.trim();
     if (
-      !audioUri ||
-      isRecording ||
-      isTranscribing ||
-      isParsingIntent ||
-      lastProcessedAudioUriRef.current === audioUri
+      !normalizedFinalText ||
+      lastParsedTextRef.current === normalizedFinalText
     ) {
       return;
     }
 
-    lastProcessedAudioUriRef.current = audioUri;
-    void processAudio(audioUri);
-  }, [audioUri, isParsingIntent, isRecording, isTranscribing, processAudio]);
+    lastParsedTextRef.current = normalizedFinalText;
+    void parseFinalText(normalizedFinalText);
+  }, [finalText, parseFinalText]);
 
   const handleToggleRecording = (): void => {
-    if (isTranscribing || isParsingIntent || isSavingEvent) {
-      return;
-    }
-
-    if (!isRecording) {
-      lastProcessedAudioUriRef.current = null;
-      setTranscript("");
-      setTranscriptionError(null);
+    if (voiceState === "idle" && appState === "idle") {
+      lastParsedTextRef.current = null;
       setIntentError(null);
       setCalendarMessage(null);
       setParsedEvent(null);
       setConfirmedEvent(null);
-      void startRecording();
+      void startListening();
       return;
     }
 
-    void stopRecording();
+    if (voiceState === "listening") {
+      void stopListening();
+    }
   };
 
   const handleCancelEvent = (): void => {
@@ -142,7 +114,7 @@ export default function RecordScreen(): React.JSX.Element {
   };
 
   const saveEventToCalendar = async (event: CalendarEvent): Promise<void> => {
-    setIsSavingEvent(true);
+    setAppState("saving");
     setCalendarMessage("正在写入系统日历...");
 
     try {
@@ -176,28 +148,38 @@ export default function RecordScreen(): React.JSX.Element {
       setConfirmedEvent(savedEvent);
       setParsedEvent(null);
       setIntentError(null);
-      setTranscriptionError(null);
       setCalendarMessage(`✅ 已加入日历${reminderMessage}`);
     } catch {
       setCalendarMessage("写入日历失败，请重试");
     } finally {
-      setIsSavingEvent(false);
+      setAppState("idle");
     }
   };
 
+  const recognizedText = partialText || finalText;
   const displayText =
-    transcriptionError ??
-    recordingError ??
+    voiceError ??
     intentError ??
     calendarMessage ??
     (confirmedEvent ? `已加入日历：${confirmedEvent.title}` : null) ??
-    transcript ??
+    recognizedText ??
     TRANSCRIPT_PLACEHOLDER;
 
   const hasDisplayError =
-    Boolean(transcriptionError ?? recordingError ?? intentError) ||
+    Boolean(voiceError ?? intentError) ||
     calendarMessage?.includes("失败") === true ||
     calendarMessage?.includes("未获得") === true;
+
+  const transcriptText =
+    voiceState === "listening"
+      ? partialText || "正在听你说话..."
+      : voiceState === "processing"
+        ? "正在整理语音..."
+        : appState === "parsing"
+          ? "正在解析事件信息..."
+          : appState === "saving"
+            ? "正在写入系统日历..."
+            : displayText;
 
   return (
     <SafeAreaView className="flex-1 bg-night">
@@ -221,45 +203,34 @@ export default function RecordScreen(): React.JSX.Element {
         <View className="flex-1 items-center justify-center">
           <Text className="mb-8 text-base text-slate-300">{STATUS_HINTS[status]}</Text>
           <View className="h-56 w-56 items-center justify-center">
-            <WaveformAnimation active={status === "recording"} />
+            <WaveformAnimation isActive={voiceState === "listening"} />
             <RecordButton status={status} onPress={handleToggleRecording} />
           </View>
           <Text className="mt-6 text-center text-lg font-semibold text-white">
-            {formatDuration(durationMillis)}
-          </Text>
-          <Text className="mt-2 text-center text-xs text-slate-500">
-            {metering === null ? "音量检测待命" : `当前音量 ${Math.round(metering)} dB`}
+            {voiceState === "listening" ? "实时识别中" : "原生语音识别"}
           </Text>
           <Text className="mt-8 text-center text-sm leading-6 text-slate-400">
-            {status === "recording"
-              ? "再次点击停止录音，静音 1.5 秒也会自动停止"
+            {voiceState === "listening"
+              ? "说完后系统会自动结束，也可以再次点击停止"
               : status === "processing"
                 ? "正在把语音整理成日历事件"
-              : "长按桌面图标选择语音记录，也会直达这个页面"}
+                : "长按桌面图标选择语音记录，也会直达这个页面"}
           </Text>
         </View>
 
         <View className="min-h-[156px] rounded-[28px] border border-white/10 bg-white/5 p-5">
           <View className="flex-row items-center justify-between">
-            <Text className="text-base font-semibold text-white">转写文字</Text>
-            {isTranscribing || isParsingIntent || isSavingEvent ? (
+            <Text className="text-base font-semibold text-white">识别文字</Text>
+            {status === "processing" ? (
               <ActivityIndicator color="#A78BFA" />
             ) : null}
           </View>
           <Text
             className={`mt-4 text-base leading-7 ${
-              hasDisplayError
-                ? "text-red-200"
-                : "text-slate-200"
+              hasDisplayError ? "text-red-200" : "text-slate-200"
             }`}
           >
-            {isTranscribing
-              ? "识别中..."
-              : isParsingIntent
-                ? "正在解析事件信息..."
-                : isSavingEvent
-                  ? "正在写入系统日历..."
-                : displayText}
+            {transcriptText}
           </Text>
         </View>
       </View>

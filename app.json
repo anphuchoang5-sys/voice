@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.seven.voicecalendar",
       "adaptiveIcon": {
         "backgroundColor": "#6C3CE1",
         "foregroundImage": "./assets/android-icon-foreground.png",

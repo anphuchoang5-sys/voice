@@ -151,7 +151,6 @@ export default function EventDetailScreen(): React.JSX.Element {
               <DetailRow label="时间" value={getTimeLabel(event)} />
               <DetailRow label="持续" value={`${event.duration} 分钟`} />
               <DetailRow label="提醒" value={`提前 ${event.reminder_min} 分钟`} />
-              <DetailRow label="系统 ID" value={event.id} />
             </View>
 
             {statusMessage ? (

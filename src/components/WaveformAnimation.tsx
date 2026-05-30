@@ -9,7 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 type WaveformAnimationProps = {
-  active: boolean;
+  isActive: boolean;
 };
 
 type WaveBarProps = {
@@ -52,7 +52,7 @@ function WaveBar({ active, index }: WaveBarProps): React.JSX.Element {
 }
 
 export function WaveformAnimation({
-  active,
+  isActive,
 }: WaveformAnimationProps): React.JSX.Element {
   return (
     <View
@@ -61,7 +61,7 @@ export function WaveformAnimation({
     >
       <View className="flex-row items-center gap-2">
         {BAR_INDEXES.map((index) => (
-          <WaveBar active={active} index={index} key={index} />
+          <WaveBar active={isActive} index={index} key={index} />
         ))}
       </View>
     </View>

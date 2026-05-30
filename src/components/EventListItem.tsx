@@ -1,5 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 
 import type { StoredCalendarEvent } from "../stores/calendar.store";
@@ -17,6 +17,17 @@ export function EventListItem({
   onDelete,
   disabled = false,
 }: EventListItemProps): React.JSX.Element {
+  const handleDeletePress = (): void => {
+    Alert.alert("删除事件", "确定要删除这个事件吗？", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "删除",
+        style: "destructive",
+        onPress: (): void => onDelete(event),
+      },
+    ]);
+  };
+
   return (
     <Swipeable
       enabled={!disabled}
@@ -24,7 +35,7 @@ export function EventListItem({
       renderRightActions={(): React.JSX.Element => (
         <Pressable
           className="ml-3 h-full w-20 items-center justify-center rounded-2xl bg-red-500 active:opacity-80"
-          onPress={(): void => onDelete(event)}
+          onPress={handleDeletePress}
         >
           <Ionicons color="#FFFFFF" name="trash-outline" size={22} />
           <Text className="mt-1 text-xs font-semibold text-white">删除</Text>
