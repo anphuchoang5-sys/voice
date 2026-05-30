@@ -13,11 +13,12 @@
 ```
 长按图标 → 点"语音"快捷方式
 → App 直接打开进入录音界面
-→ 说话（自动静音检测停止）
-→ Groq Whisper 转文字
+→ 说话（Android 系统自动静音检测停止）
+→ Google ASR 实时转文字（边说边显示，无需上传文件）
 → DeepSeek 解析意图（时间/事件/提醒）
-→ 确认卡弹出（可修改）
-→ 同时写入：① 手机系统日历 ② App 内日历
+→ 确认卡弹出（摘要展示 + 三个按钮：取消 / 编辑 / 确认）
+→ 点"编辑"进入编辑模式可修改字段
+→ 点"确认"写入：① 手机系统日历 ② App 内日历
 → 震动反馈完成
 ```
 
@@ -27,10 +28,10 @@
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| 框架 | **Expo SDK 51 · Managed Workflow** | TypeScript 模板 |
+| 框架 | **Expo SDK 51 · Bare Workflow**（阶段六后） | TypeScript 模板，prebuild 后转 Bare |
 | 导航 | **expo-router v3** | 文件路由系统 |
-| 录音 | **expo-av** | 官方音频库 |
-| 语音转文字 | **Groq Whisper API** (`whisper-large-v3`) | 免费额度，极速 |
+| 语音识别 | **@react-native-voice/voice** | 封装 Android 原生 SpeechRecognizer |
+| STT 引擎 | **Google ASR**（系统内置） | 无需 API Key，中文准确率高，实时流式 |
 | 意图解析 | **DeepSeek API** (`deepseek-chat`) | 中文理解最强之一 |
 | 系统日历 | **expo-calendar** | 读写手机原生日历 |
 | 本地通知 | **expo-notifications** | 事件提醒 |
@@ -58,7 +59,6 @@ VoiceCalendar/
 │   │   ├── CalendarGrid.tsx      # 月历网格组件
 │   │   └── EventListItem.tsx     # 事件列表项
 │   ├── services/
-│   │   ├── stt.service.ts        # Groq Whisper 调用
 │   │   ├── intent.service.ts     # DeepSeek 意图解析
 │   │   ├── calendar.service.ts   # expo-calendar 读写封装
 │   │   └── notification.service.ts # 提醒设置封装
@@ -67,7 +67,7 @@ VoiceCalendar/
 │   ├── types/
 │   │   └── index.ts              # 全局 TypeScript 类型
 │   ├── hooks/
-│   │   ├── useRecording.ts       # 录音逻辑 Hook
+│   │   ├── useVoice.ts           # 语音识别 Hook（@react-native-voice/voice）
 │   │   └── useCalendar.ts        # 日历操作 Hook
 │   └── constants/
 │       ├── config.ts             # API 端点、模型名等常量
@@ -224,10 +224,14 @@ npx expo install expo-router
    ```
 3. 定义 `src/types/index.ts` 中的 `CalendarEvent` 类型
 4. 在 `record.tsx` 中：STT 文字出来后 → 自动调用 intent → 显示解析结果
-5. 实现 `src/components/EventConfirmCard.tsx`：
-   - 底部弹出 Sheet
-   - 显示：标题（可编辑）、日期时间（可编辑）、提醒（可编辑）
-   - 两个按钮：✅ 确认保存 / ❌ 取消
+5. 实现 `src/components/EventConfirmCard.tsx`，组件内部有两个 mode：
+   **summary mode（默认）**：
+   - 底部弹出 Sheet，只读展示：标题、日期、时间、提醒分钟
+   - 三个按钮：❌ 取消 / ✏️ 编辑 / ✅ 确认
+   **edit mode（点编辑进入）**：
+   - 展示可编辑 TextInput：标题、日期、时间、提醒分钟、全天开关
+   - 两个按钮：← 返回（回到 summary 并保留修改） / 💾 保存（同上）
+   - mode 切换无需关闭卡片，内容区域平滑过渡
 
 **测试用例（需全部通过）：**
 ```
@@ -286,12 +290,20 @@ npx expo install expo-router
    // 取消事件提醒
    async function cancelReminder(eventId: string): Promise<void>
    ```
-3. 在 `EventConfirmCard` 点击确认后：
+3. 重构 `EventConfirmCard`（在已有代码基础上修改，不要重写）：
+   - 新增 `mode` 状态：`"summary" | "editing"`，默认 `"summary"`
+   - summary mode：只读展示事件字段，底部三按钮（取消 / 编辑 / 确认）
+   - editing mode：可编辑 TextInput 表单，底部两按钮（返回 / 保存）
+   - 点"编辑"：切换到 editing mode
+   - 点"返回"或"保存"：将修改后的字段同步回 summary，切换回 summary mode
+   - 点"确认"（在 summary mode）：触发写入流程
+   - 修复 Q3：取消/确认时先播滑出动画再 unmount（用 isMounted 状态控制）
+4. 在 `EventConfirmCard` 点击"确认"后：
    - 调用 `createEvent` 写入系统日历
    - 调用 `scheduleReminder` 设置通知
-   - 震动反馈（`expo-haptics`）
-   - 显示成功动画后关闭卡片，返回主页
-4. 在 Zustand store 中同步保存事件列表（用于 App 内展示）
+   - 震动反馈（`expo-haptics`，ImpactFeedbackStyle.Medium）
+   - 显示成功状态后关闭卡片
+5. 在 Zustand store 中同步保存事件列表（用于 App 内展示）
 
 **阶段四完成标准：**
 - [ ] 完整流程：录音 → 文字 → 解析 → 确认 → 手机系统日历能看到事件
@@ -341,25 +353,108 @@ npx expo install expo-router
 
 ---
 
-### 阶段六：完善 + 边缘情况
-**预计时间：48–60h**
+### 阶段六：切换原生 STT + 高优先级修复
+**预计时间：48–56h**
 
-**任务清单：**
-1. 首次启动引导页（说明需要权限 + API Key 配置）
-2. 设置页面：输入/修改 Groq Key 和 DeepSeek Key（存 `SecureStore`）
-3. 完善权限拒绝的处理（引导用户去设置页开启）
-4. 网络断开时的提示
-5. 空状态 UI（没有事件时的友好提示）
-6. App Shortcuts 在真机上完整测试
-7. 优化录音 → 结果的速度感知（骨架屏/流式显示）
+> 原因：Groq 注册在中国大陆受限，改用 Android 原生语音识别（Google ASR），零 API Key 依赖，中文效果同级别。
+
+**步骤一：安装依赖 + Prebuild**
+```bash
+npm install @react-native-voice/voice
+npx expo prebuild --platform android --clean
+```
+说明：prebuild 会生成 `android/` 目录，项目转为 Bare Workflow。之后不能用 Expo Go，需构建 dev APK 测试。
+
+**步骤二：删除 Groq 相关文件**
+- 删除 `src/services/stt.service.ts`（整个 Groq 调用，不再需要）
+
+**步骤三：将 `src/hooks/useRecording.ts` 重写并改名为 `src/hooks/useVoice.ts`**
+
+新 Hook 接口：
+```typescript
+type VoiceState = 'idle' | 'listening' | 'processing';
+
+type UseVoiceReturn = {
+  voiceState: VoiceState;
+  partialText: string;    // 实时中间识别结果
+  finalText: string | null; // 最终确认文字
+  errorMessage: string | null;
+  startListening: () => Promise<void>;
+  stopListening: () => Promise<void>;
+  resetVoice: () => void;
+};
+```
+
+实现要点：
+- `Voice.onSpeechStart` → `voiceState = 'listening'`
+- `Voice.onSpeechPartialResults` → 更新 `partialText`（实时显示）
+- `Voice.onSpeechEnd` → `voiceState = 'processing'`
+- `Voice.onSpeechResults` → 设置 `finalText`，`voiceState = 'idle'`
+- `Voice.onSpeechError` → 错误码 `'7'`（无语音）静默忽略，其余设 `errorMessage`
+- `Voice.start('zh-CN')` 启动，Android 系统自带静音检测，无需手动实现
+- `useEffect` 清理时调用 `Voice.destroy()`
+
+**步骤四：更新 `app/record.tsx`**
+
+新状态流程：
+```
+按录音 → startListening() → 实时显示 partialText
+→ 用户停止说话（系统自动检测）→ finalText 出现
+→ useEffect 监听 finalText → 调用 parseIntent()
+→ 成功 → 弹出 EventConfirmCard
+→ 失败 → 显示"未能识别事件，请重新描述"
+```
+
+按钮逻辑：
+- `voiceState === 'idle'` → 按下调用 `startListening()`
+- `voiceState === 'listening'` → 按下调用 `stopListening()`（提前手动停止）
+- `voiceState === 'processing'` → 禁用按钮，显示"识别中..."
+
+**步骤五：更新 `src/components/WaveformAnimation.tsx`**
+
+去掉 metering prop，改为接受 `isActive: boolean`。活跃时用 `withRepeat(withTiming(...), -1, true)` 循环脉冲动画，非活跃时静止。
+
+**步骤六：清理 `src/constants/config.ts`**
+
+删除以下常量（Groq / 静音检测相关，均不再需要）：
+- `GROQ_TRANSCRIPTION_URL`、`GROQ_WHISPER_MODEL`、`GROQ_TRANSCRIPTION_LANGUAGE`
+- `GROQ_API_KEY`（env 读取）
+- `SILENCE_THRESHOLD_DB`、`SILENCE_DETECTION_MIN_DURATION_MS`、`SILENCE_DETECTION_WINDOW_MS`、`RECORDING_STATUS_INTERVAL_MS`
+
+保留：`REQUEST_TIMEOUT_MS`、`DEEPSEEK_API_URL`、`DEEPSEEK_MODEL`、`DEEPSEEK_API_KEY`
+
+**步骤七：修复高优先级 Bug**
+
+Q8 — `app/event/[id].tsx`：删除第 154 行 `<DetailRow label="系统 ID" value={event.id} />`
+
+Q9 — `src/components/EventListItem.tsx`：左滑删除触发前加 `Alert.alert` 二次确认，与详情页行为保持一致
+
+**步骤八：更新 `.env.example`**
+
+删除 `EXPO_PUBLIC_GROQ_API_KEY` 行，只保留 `EXPO_PUBLIC_DEEPSEEK_API_KEY`
+
+**步骤九：验证**
+```bash
+npm run typecheck
+```
+
+**阶段六完成标准：**
+- [ ] `npm run typecheck` 通过
+- [ ] 无任何文件 import 已删除的 `stt.service.ts` 或旧的 `useRecording`
+- [ ] `src/hooks/useVoice.ts` 存在并导出 `useVoice`
+- [ ] Q8 修复：事件详情不显示系统 ID
+- [ ] Q9 修复：左滑删除有确认弹窗
+- [ ] `.env.example` 只剩 DeepSeek Key
 
 **⛔ 阶段六检查点：停止，输出以下内容：**
 ```
 === 阶段六完成报告 ===
-1. 所有权限场景测试结果
-2. 首次启动流程描述
-3. 设置页 API Key 是否正常保存和调用
-4. 整体 App 可演示度评分（1-10）及理由
+1. 删除/新增/修改的文件完整列表
+2. useVoice hook 核心逻辑要点
+3. record.tsx 新状态流程描述
+4. Q8 和 Q9 修复确认
+5. typecheck 结果
+6. 构建 dev APK 的命令（供用户下一步执行）
 ```
 
 ---
@@ -402,7 +497,6 @@ npx expo install expo-router
 ## 环境变量模板 (.env.example)
 
 ```
-EXPO_PUBLIC_GROQ_API_KEY=your_groq_api_key_here
 EXPO_PUBLIC_DEEPSEEK_API_KEY=your_deepseek_api_key_here
 ```
 
@@ -410,19 +504,26 @@ EXPO_PUBLIC_DEEPSEEK_API_KEY=your_deepseek_api_key_here
 
 ## 快速参考：关键 API 调用
 
-### Groq Whisper STT
+### Android 原生 STT（@react-native-voice/voice）
 ```typescript
-const formData = new FormData();
-formData.append('file', { uri: audioUri, name: 'audio.m4a', type: 'audio/m4a' } as any);
-formData.append('model', 'whisper-large-v3');
-formData.append('language', 'zh');
+import Voice from '@react-native-voice/voice';
 
-const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` },
-  body: formData,
-});
-const { text } = await response.json();
+// 注册回调（在 useEffect 里）
+Voice.onSpeechResults = (e) => {
+  const text = e.value?.[0] ?? '';  // 最终识别结果
+};
+Voice.onSpeechPartialResults = (e) => {
+  const partial = e.value?.[0] ?? '';  // 实时中间结果
+};
+
+// 启动（zh-CN = 普通话）
+await Voice.start('zh-CN');
+
+// 手动停止（系统也会自动在静音后停止）
+await Voice.stop();
+
+// 清理
+await Voice.destroy();
 ```
 
 ### DeepSeek 意图解析

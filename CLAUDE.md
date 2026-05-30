@@ -3,6 +3,13 @@
 > 此文件由 Claude 维护，记录项目背景、架构决策、开发日志和已知问题。
 > 每次重要变更后更新对应章节。
 
+## Claude 审查风格约定
+
+代码审查时，每个问题必须包含三部分：
+- 🔍 **这是什么**：一句话解释这段代码在做什么（面向非技术背景）
+- ⚠️ **风险**：不修的后果（报错 / 功能失效 / 安全隐患 / 性能问题）
+- 🛠️ **怎么修**：具体改动建议
+
 ---
 
 ## 项目背景
@@ -22,11 +29,14 @@
 - Expo Go 可以在手机上秒级预览，不需要 Android Studio 或编译 APK
 - 72小时内完成可交付产品的最优路径
 
-### 为什么用 Groq Whisper（不是 Android 原生 SpeechRecognizer）
-- Android 原生 STT 需要 bare workflow + 原生模块，成本高
-- Groq 提供的 Whisper API 响应极快（接近实时），免费额度对黑客松够用
-- 中文准确率更稳定，不依赖手机系统语言包
-- 缺点：需要网络连接
+### 为什么阶段六换成 Android 原生 STT（放弃 Groq Whisper）
+- Groq 限制中国大陆个人邮箱注册，GitHub OAuth 也被拦截，无法获取 API Key
+- Android 原生 SpeechRecognizer（Google ASR）中文准确率与 Whisper 相当
+- 零 API Key 依赖，演示不会因服务商问题失败
+- 边说话边实时显示识别文字，体验优于"录音→上传→等待"模式
+- Android 系统自带静音检测，无需手动实现
+- 代价：需要 `npx expo prebuild`，项目转 Bare Workflow，失去 Expo Go 兼容
+- 注意：在中国大陆需要 VPN 才能使用 Google ASR；部分国产 ROM 可能使用自家 ASR 引擎
 
 ### 为什么用 DeepSeek（不是 Claude / GPT-4）
 - 日历意图解析是简单 NLP 任务，prompt 极短（< 100 token）
@@ -49,10 +59,9 @@
 ## 技术栈速查
 
 ```
-框架:     Expo SDK 51 (Managed) + TypeScript
+框架:     Expo SDK 51 (Bare Workflow，阶段六 prebuild 后) + TypeScript
 路由:     expo-router v3
-录音:     expo-av
-STT:      Groq API (whisper-large-v3) — https://console.groq.com
+语音识别: @react-native-voice/voice → Android SpeechRecognizer → Google ASR
 意图解析: DeepSeek API (deepseek-chat) — https://platform.deepseek.com
 系统日历: expo-calendar
 通知提醒: expo-notifications
@@ -70,8 +79,9 @@ STT:      Groq API (whisper-large-v3) — https://console.groq.com
 ### 必需的 API Keys
 | Key | 获取地址 | 免费额度 |
 |-----|---------|---------|
-| `GROQ_API_KEY` | https://console.groq.com | 有免费额度 |
 | `DEEPSEEK_API_KEY` | https://platform.deepseek.com | 注册送余额 |
+
+> Groq Whisper 已于阶段六放弃，改用 Android 原生 SpeechRecognizer，无需 API Key。
 
 ### .env 文件位置
 ```
@@ -257,6 +267,8 @@ src/constants/
 |------|------|------|
 | 2026-05-29 | 选择 Expo Managed Workflow | 开发者纯 Web 背景，72h 内最高完成率 |
 | 2026-05-29 | 选择 Groq Whisper 而非原生 STT | 中文准确率更稳，Managed workflow 兼容 |
+| 2026-05-30 | 阶段六切换到 Android 原生 STT | Groq 在中国大陆无法注册，Google ASR 效果相当且零依赖 |
+| 2026-05-30 | 项目转 Bare Workflow（prebuild） | @react-native-voice/voice 需要原生模块，Expo Go 不再适用 |
 | 2026-05-29 | 选择 DeepSeek 而非 Claude | 成本极低，中文意图解析够用 |
 | 2026-05-29 | Android 优先，暂不做 iOS | 快捷方式在 iOS 需要 WidgetKit，成本高 |
 | 2026-05-29 | 先不做桌面小组件 | App Shortcuts 足够满足便携性需求 |
