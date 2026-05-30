@@ -2,6 +2,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import type { CalendarEvent } from "../types";
+import { parseDateString } from "../utils/date";
 
 const REMINDER_CHANNEL_ID = "voice-calendar-reminders";
 const MIN_FUTURE_TRIGGER_MS = 60_000;
@@ -103,19 +104,3 @@ function getEventStartDate(event: CalendarEvent): Date {
   );
 }
 
-function parseDateString(date: string): {
-  year: number;
-  monthIndex: number;
-  day: number;
-} {
-  const [yearText, monthText, dayText] = date.split("-");
-  const year = Number.parseInt(yearText, 10);
-  const month = Number.parseInt(monthText, 10);
-  const day = Number.parseInt(dayText, 10);
-
-  return {
-    year: Number.isFinite(year) ? year : new Date().getFullYear(),
-    monthIndex: Number.isFinite(month) ? Math.max(0, month - 1) : 0,
-    day: Number.isFinite(day) ? day : 1,
-  };
-}

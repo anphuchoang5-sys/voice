@@ -68,7 +68,6 @@ export function useVoice(): UseVoiceResult {
 
   const startListening = async (): Promise<void> => {
     resetVoice();
-    setVoiceState("processing");
 
     try {
       await Voice.start("zh-CN");

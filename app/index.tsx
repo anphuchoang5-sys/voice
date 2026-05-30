@@ -15,6 +15,7 @@ import { CalendarGrid } from "../src/components/CalendarGrid";
 import { EventListItem } from "../src/components/EventListItem";
 import { useCalendar } from "../src/hooks/useCalendar";
 import type { StoredCalendarEvent } from "../src/stores/calendar.store";
+import { formatDate } from "../src/utils/date";
 
 export default function HomeScreen(): React.JSX.Element {
   const today = useMemo(() => new Date(), []);
@@ -229,13 +230,6 @@ function isSameMonth(date: Date, targetDate: Date): boolean {
     date.getFullYear() === targetDate.getFullYear() &&
     date.getMonth() === targetDate.getMonth()
   );
-}
-
-function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function formatMonthTitle(year: number, month: number): string {

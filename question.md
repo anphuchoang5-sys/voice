@@ -76,7 +76,7 @@
 ---
 
 ### Q6 — 日期解析代码在多处重复
-- **文件**：`calendar.service.ts` / `notification.service.ts` / `index.tsx` / `CalendarGrid.tsx`
+- **文件**：`src/utils/date.ts`（新建）
 
 > 🔍 **这是什么**：`parseDateString` 和 `formatDate` 函数在多个文件里各写了一份
 > ⚠️ **风险**：改一处容易漏掉其他地方
@@ -84,27 +84,27 @@
 
 | 是否已解决 | 解决方式 | 决策人 |
 |-----------|---------|--------|
-| 🔴 未解决 | 阶段六统一整理 | — |
+| ✅ 已解决 | 新建 `src/utils/date.ts`，`formatDate` / `formatTime` / `parseDateString` 统一导出；`calendar.service.ts` / `notification.service.ts` / `index.tsx` / `CalendarGrid.tsx` 改为 import，本地重复定义全部删除，typecheck 通过 | Claude |
 
 ---
 
 ### Q7 — npm 日志文件反复泄漏进项目目录
-- **文件**：`VoiceCalendar/%USERPROFILE%/...`
+- **文件**：`.npmrc`（新建）
 
 > 🔍 **这是什么**：Codex 跑 npm 时日志写到了项目目录里
 > ⚠️ **风险**：会被 git 一起提交，污染代码库
-> 🛠️ **修法**：删除目录 + `.gitignore` 加防护 + 阶段六加 `.npmrc` 根治
+> 🛠️ **修法**：删除目录 + `.gitignore` 加防护 + `.npmrc` 根治
 
 | 是否已解决 | 解决方式 | 决策人 |
 |-----------|---------|--------|
-| ⚠️ 临时处理 | Claude 每次审查时手动删除，已加 `.gitignore`，但根本原因未解决 | Claude |
+| ✅ 已解决 | `VoiceCalendar.init-backup/` 已删除；新建 `.npmrc` 将 cache 和 logs-dir 显式指向系统目录，防止再次泄漏进项目 | Claude |
 
 ---
 
 ## 阶段五新增
 
 ### Q8 — 事件详情页把系统内部 ID 显示给用户看
-- **文件**：`app/event/[id].tsx` 第 155 行
+- **文件**：`app/event/[id].tsx`（已修复）
 
 > 🔍 **这是什么**：事件详情页有一行"系统 ID: xxxx"，显示的是 Android 日历给这个事件分配的内部编号，普通用户完全不需要看到这个
 > ⚠️ **风险**：显得像开发者调试界面，评委一眼看出未完成，扣印象分
@@ -112,12 +112,12 @@
 
 | 是否已解决 | 解决方式 | 决策人 |
 |-----------|---------|--------|
-| 🔴 未解决 | 阶段六处理 | — |
+| ✅ 已解决 | 阶段六 Codex 删除该行，Claude 审查确认 | Codex |
 
 ---
 
 ### Q9 — 左滑删除没有确认步骤，容易误删
-- **文件**：`src/components/EventListItem.tsx`
+- **文件**：`src/components/EventListItem.tsx`（已修复）
 
 > 🔍 **这是什么**：在主页事件列表左滑后点删除，事件会立即消失，没有"确定要删除吗？"的二次确认。但在事件详情页删除是有确认弹窗的，两个地方行为不一致。
 > ⚠️ **风险**：手滑误删事件，体验差；与详情页行为不统一，让用户困惑
@@ -125,7 +125,24 @@
 
 | 是否已解决 | 解决方式 | 决策人 |
 |-----------|---------|--------|
-| 🔴 未解决 | 阶段六处理 | — |
+| ✅ 已解决 | 阶段六 Codex 加入 Alert.alert 二次确认，Claude 审查确认 | Codex |
+
+---
+
+---
+
+## 阶段六新增
+
+### Q10 — `startListening()` 在识别启动前错误地设置了 processing 状态
+- **文件**：`src/hooks/useVoice.ts` 第 71 行
+
+> 🔍 **这是什么**：用户点下录音按钮后，`startListening()` 先把状态设成 `"processing"`（语义是"识别完成、正在整理"），然后才调用 `Voice.start()`，等系统回调 `onSpeechStart` 后才变成 `"listening"`。两个状态之间有短暂的语义错误。
+> ⚠️ **风险**：按下按钮的瞬间 UI 会闪一下"正在整理，请稍候"，然后才变成"正在听你说话"，演示时眼尖的评委可能察觉到界面抖动
+> 🛠️ **修法**：删除 `startListening()` 里的 `setVoiceState("processing")` 那一行（第 71 行），让状态从 `idle` 由 `onSpeechStart` 回调自然推进到 `listening`，无需手动设置中间状态
+
+| 是否已解决 | 解决方式 | 决策人 |
+|-----------|---------|--------|
+| ✅ 已解决 | 删除 `startListening()` 中的 `setVoiceState("processing")`，状态由 `onSpeechStart` 回调自然推进 | Claude |
 
 ---
 
@@ -138,7 +155,8 @@
 | Q3 | 三 | 确认卡无滑出动画 | ✅ 已解决 | — |
 | Q4 | 四 | 重复调用日历初始化 | ✅ 已解决 | — |
 | Q5 | 四 | 错误提示语误导用户 | ✅ 已解决 | — |
-| Q6 | 四 | 日期解析代码重复 | 🔴 未解决 | 低 |
-| Q7 | 四 | npm 日志泄漏进项目 | ⚠️ 临时处理 | 阶段六根治 |
-| Q8 | 五 | 系统 ID 暴露给用户 | 🔴 未解决 | **高** |
-| Q9 | 五 | 左滑删除无确认 | 🔴 未解决 | **高** |
+| Q6 | 四 | 日期解析代码重复 | ✅ 已解决 | — |
+| Q7 | 四 | npm 日志泄漏进项目 | ✅ 已解决 | — |
+| Q8 | 五 | 系统 ID 暴露给用户 | ✅ 已解决 | — |
+| Q9 | 五 | 左滑删除无确认 | ✅ 已解决 | — |
+| Q10 | 六 | startListening 状态语义错误 | ✅ 已解决 | — |
