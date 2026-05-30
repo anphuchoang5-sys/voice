@@ -146,6 +146,34 @@
 
 ---
 
+## 阶段七新增 / 待决策
+
+### Q11 — 国行手机 STT 兼容性待实机验证
+- **文件**：`src/hooks/useVoice.ts` / `AndroidManifest.xml`
+
+> 🔍 **这是什么**：`@react-native-voice/voice` 调用 Android `SpeechRecognizer` API，默认实现由设备厂商提供。小米、OPPO、vivo、三星国行等主流国产 ROM 通常内置自家 ASR 引擎（讯飞、百度等）而非 Google ASR，理论上不需要 VPN。但这一行为未经实机验证，若设备实际回退到 Google ASR，则在大陆无 VPN 情况下语音识别会直接失败。
+> ⚠️ **风险**：演示现场没有 VPN + 设备走 Google ASR → 录音按钮按下后无任何识别结果，核心功能失效
+> 🛠️ **修法**：在目标演示设备上安装 Dev APK，实测语音识别是否正常工作。若失败，考虑：① 确认设备 ROM 并联系厂商 ASR 文档；② 增加识别失败兜底提示"请检查网络或语音识别服务"
+
+| 是否已解决 | 解决方式 | 决策人 |
+|-----------|---------|--------|
+| ⏸️ 待实机验证 | 需在演示设备上安装 APK 测试语音识别是否可用 | — |
+
+---
+
+### Q12 — 适配多家 AI API 供用户自主选择（暂缓）
+- **文件**：`src/services/intent.service.ts`、`src/constants/config.ts`
+
+> 🔍 **这是什么**：当前意图解析硬绑定 DeepSeek API，用户必须自备 DeepSeek Key。若支持 OpenAI、Claude、通义千问等多家服务商，用户可用自己已有的 Key，降低上手门槛。
+> ⚠️ **风险**：暂无——演示场景下 DeepSeek 够用，多 API 适配工程量较大，72h 内不值得投入
+> 🛠️ **修法（暂缓）**：抽象 `IntentProvider` 接口，在 onboarding 页选择服务商并持久化到 SecureStore；各 provider 实现同一 `parseIntent(text): Promise<CalendarEvent | null>` 签名
+
+| 是否已解决 | 解决方式 | 决策人 |
+|-----------|---------|--------|
+| ⏸️ 暂缓 | 72h 内不做，赛后如需开源维护可作为 v2 功能 | 用户 |
+
+---
+
 ## 汇总
 
 | 编号 | 阶段 | 问题简述 | 是否已解决 | 优先级 |
@@ -160,3 +188,5 @@
 | Q8 | 五 | 系统 ID 暴露给用户 | ✅ 已解决 | — |
 | Q9 | 五 | 左滑删除无确认 | ✅ 已解决 | — |
 | Q10 | 六 | startListening 状态语义错误 | ✅ 已解决 | — |
+| Q11 | 七 | 国行手机 STT 兼容性 | ⏸️ 待实机验证 | 高 |
+| Q12 | 七 | 适配多家 AI API（暂缓） | ⏸️ 暂缓 | 低 |

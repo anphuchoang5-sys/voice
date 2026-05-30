@@ -91,15 +91,15 @@ export default function EventDetailScreen(): React.JSX.Element {
         return;
       }
 
-      await deleteSystemEvent(event.id);
-      await cancelReminder(event.id);
-      removeEvent(event.id);
-
       const nextEventId = await createEvent(updatedEvent);
       const savedEvent: StoredCalendarEvent = {
         ...updatedEvent,
         id: nextEventId,
       };
+
+      await deleteSystemEvent(event.id);
+      await cancelReminder(event.id);
+      removeEvent(event.id);
 
       const hasNotificationPermission = await requestNotificationPermission();
       if (hasNotificationPermission) {

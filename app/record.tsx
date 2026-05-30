@@ -167,7 +167,7 @@ export default function RecordScreen(): React.JSX.Element {
 
   const hasDisplayError =
     Boolean(voiceError ?? intentError) ||
-    calendarMessage?.includes("失败") === true ||
+    (calendarMessage?.includes("失败") === true && !calendarMessage.startsWith("✅")) ||
     calendarMessage?.includes("未获得") === true;
 
   const transcriptText =
