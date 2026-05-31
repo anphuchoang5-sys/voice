@@ -52,12 +52,17 @@ ${eventsBlock}
 1. 创建事件 → {"action": "create", "events": [{"title": "事件标题", "date": "YYYY-MM-DD", "time": "HH:MM", "duration": 60, "reminder_min": 15, "allDay": false}]}
    - 用户一句话可能包含多个事件（如"明天上午9点上课，下午2点出去玩"），必须全部提取放入 events 数组
    - 即使只有一个事件也用 events 数组包裹
-2. 删除事件 → {"action": "delete", "eventTitle": "要删除的事件标题", "eventDate": "YYYY-MM-DD"}
-   - 用户说的标题是口语化的，需要提取核心关键词。例如"那个产品评审会"、"明天下午的会议" → 提取"产品评审会"或"会议"
-   - 日期从用户的表达中推断（今天/明天/后天/周几等），填入 eventDate
-3. 查询事件 → {"action": "query", "date": "YYYY-MM-DD"}
+2. 删除事件 → {"action": "delete", "titles": [{"eventTitle": "事件标题关键词", "eventDate": "YYYY-MM-DD"}]}
+   - 可同时删除多个事件，如"把明天上午的课和下午的会都取消" → titles 数组含两条
+   - 标题只提取核心关键词，不要完整句子。如"那个产品评审会" → "产品评审会"
+   - 日期从表达中推断（今天/明天/后天/周几等）
+   - 即使只删一个也用 titles 数组包裹
+3. 修改事件 → {"action": "update", "eventTitle": "原标题关键词", "eventDate": "YYYY-MM-DD", "updatedEvent": {"title": "新标题", "date": "YYYY-MM-DD", "time": "HH:MM", "duration": 60, "reminder_min": 15, "allDay": false}}
+   - "把明天下午出去玩改为明天下午开会" → eventTitle="出去玩", eventDate="明天", updatedEvent.title="开会", updatedEvent.date="明天", updatedEvent.time="14:00"
+   - 用户可能改标题、时间、日期中的一项或多项，只修改提到的部分，其他保持原样
+4. 查询事件 → {"action": "query", "date": "YYYY-MM-DD"}
    - 用户问某天/某月/某周有什么安排时，返回要查询的日期
-4. 无法识别 → {"action": "unknown"}
+5. 无法识别 → {"action": "unknown"}
    - 信息不足以确定意图、标题或日期时返回此值
 
 只返回 JSON，不要 Markdown 代码块，不要其他文字。`;
