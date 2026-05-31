@@ -19,6 +19,11 @@ import Animated, {
 } from "react-native-reanimated";
 
 import type { CalendarEvent } from "../types";
+import { formatDate, formatTime } from "../utils/date";
+
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 
 type ConfirmCardMode = "summary" | "editing";
 
@@ -76,6 +81,8 @@ export function EventConfirmCard({
   const [currentEvent, setCurrentEvent] = useState<CalendarEvent | null>(null);
   const [mode, setMode] = useState<ConfirmCardMode>("summary");
   const [fields, setFields] = useState<EditableEventFields | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
 
   // 居中弹窗：用缩放 + 淡入代替底部滑入
   const scale = useSharedValue<number>(0.92);
@@ -150,6 +157,40 @@ export function EventConfirmCard({
 
     return buildCalendarEvent(currentEvent, fields);
   }, [currentEvent, fields]);
+
+  const datePickerValue = useMemo((): Date => {
+    if (!fields) return new Date();
+    const d = new Date(fields.date + "T00:00:00");
+    return Number.isNaN(d.getTime()) ? new Date() : d;
+  }, [fields?.date]);
+
+  const timePickerValue = useMemo((): Date => {
+    if (!fields) return new Date();
+    const d = new Date();
+    const [h, m] = (fields.time || "09:00").split(":").map(Number);
+    d.setHours(h || 0, m || 0, 0, 0);
+    return d;
+  }, [fields?.time]);
+
+  const handleDateChange = (
+    _event: DateTimePickerEvent,
+    selectedDate?: Date,
+  ): void => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      updateField("date", formatDate(selectedDate));
+    }
+  };
+
+  const handleTimeChange = (
+    _event: DateTimePickerEvent,
+    selectedDate?: Date,
+  ): void => {
+    setShowTimePicker(false);
+    if (selectedDate) {
+      updateField("time", formatTime(selectedDate));
+    }
+  };
 
   if (!isMounted || !fields || !previewEvent) {
     return null;
@@ -270,30 +311,54 @@ export function EventConfirmCard({
                       <Text className="mb-2 text-sm font-medium text-slate-300">
                         日期
                       </Text>
-                      <TextInput
-                        className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white"
-                        onChangeText={(value): void =>
-                          updateField("date", value)
-                        }
-                        placeholder="YYYY-MM-DD"
-                        placeholderTextColor="#94A3B8"
-                        value={fields.date}
-                      />
+                      <Pressable
+                        className="h-12 justify-center rounded-2xl border border-white/10 bg-white/10 px-4 active:opacity-70"
+                        onPress={(): void => setShowDatePicker(true)}
+                      >
+                        <Text className="text-base text-white">
+                          {fields.date}
+                        </Text>
+                      </Pressable>
+                      {showDatePicker ? (
+                        <DateTimePicker
+                          display="default"
+                          maximumDate={new Date(2030, 11, 31)}
+                          minimumDate={new Date(2020, 0, 1)}
+                          mode="date"
+                          onChange={handleDateChange}
+                          value={datePickerValue}
+                        />
+                      ) : null}
                     </View>
                     <View className="w-28">
                       <Text className="mb-2 text-sm font-medium text-slate-300">
                         时间
                       </Text>
-                      <TextInput
-                        className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white disabled:bg-white/5 disabled:text-slate-400"
-                        editable={!fields.allDay}
-                        onChangeText={(value): void =>
-                          updateField("time", value)
-                        }
-                        placeholder="HH:MM"
-                        placeholderTextColor="#94A3B8"
-                        value={fields.time}
-                      />
+                      <Pressable
+                        className={`h-12 justify-center rounded-2xl border border-white/10 px-4 active:opacity-70 ${
+                          fields.allDay ? "bg-white/5 opacity-40" : "bg-white/10"
+                        }`}
+                        disabled={fields.allDay}
+                        onPress={(): void => {
+                          if (!fields.allDay) setShowTimePicker(true);
+                        }}
+                      >
+                        <Text
+                          className={`text-base ${
+                            fields.allDay ? "text-slate-400" : "text-white"
+                          }`}
+                        >
+                          {fields.time || "HH:MM"}
+                        </Text>
+                      </Pressable>
+                      {showTimePicker ? (
+                        <DateTimePicker
+                          display="default"
+                          mode="time"
+                          onChange={handleTimeChange}
+                          value={timePickerValue}
+                        />
+                      ) : null}
                     </View>
                   </View>
 
