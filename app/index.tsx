@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -39,6 +39,17 @@ export default function HomeScreen(): React.JSX.Element {
   const [isAddingEvent, setIsAddingEvent] = useState<boolean>(false);
   const [addStatusMessage, setAddStatusMessage] = useState<string | null>(null);
   const addEvent = useCalendarStore((state) => state.addEvent);
+  const { focusDate } = useLocalSearchParams<{ focusDate?: string }>();
+
+  useEffect((): void => {
+    if (focusDate && /^\d{4}-\d{2}-\d{2}$/.test(focusDate)) {
+      setSelectedDate(focusDate);
+      const [y, m] = focusDate.split("-").map(Number);
+      if (Number.isFinite(y) && Number.isFinite(m)) {
+        setVisibleMonth(new Date(y, m - 1, 1));
+      }
+    }
+  }, [focusDate]);
 
   const year = visibleMonth.getFullYear();
   const month = visibleMonth.getMonth() + 1;
