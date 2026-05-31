@@ -49,7 +49,9 @@ ${eventsBlock}
 
 根据用户意图，返回以下 JSON 之一：
 
-1. 创建事件 → {"action": "create", "event": {"title": "事件标题", "date": "YYYY-MM-DD", "time": "HH:MM", "duration": 60, "reminder_min": 15, "allDay": false}}
+1. 创建事件 → {"action": "create", "events": [{"title": "事件标题", "date": "YYYY-MM-DD", "time": "HH:MM", "duration": 60, "reminder_min": 15, "allDay": false}]}
+   - 用户一句话可能包含多个事件（如"明天上午9点上课，下午2点出去玩"），必须全部提取放入 events 数组
+   - 即使只有一个事件也用 events 数组包裹
 2. 删除事件 → {"action": "delete", "eventTitle": "要删除的事件标题", "eventDate": "YYYY-MM-DD"}
    - 用户说的标题是口语化的，需要提取核心关键词。例如"那个产品评审会"、"明天下午的会议" → 提取"产品评审会"或"会议"
    - 日期从用户的表达中推断（今天/明天/后天/周几等），填入 eventDate

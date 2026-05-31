@@ -114,9 +114,20 @@ function normalizeVoiceIntent(value: unknown): VoiceIntent {
   const { action } = value;
 
   if (action === "create") {
-    const event = normalizeCalendarEvent(value.event);
-    if (event) {
-      return { action: "create", event };
+    const events: CalendarEvent[] = [];
+    const rawEvents = Array.isArray(value.events) ? value.events : null;
+
+    if (rawEvents) {
+      for (const raw of rawEvents) {
+        const ev = normalizeCalendarEvent(raw);
+        if (ev) {
+          events.push(ev);
+        }
+      }
+    }
+
+    if (events.length > 0) {
+      return { action: "create", events };
     }
   }
 
