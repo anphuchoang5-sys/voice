@@ -14,9 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EventConfirmCard } from "../../src/components/EventConfirmCard";
 import {
-  createEvent,
   deleteEvent as deleteSystemEvent,
-  requestCalendarPermission,
+  updateEvent,
 } from "../../src/services/calendar.service";
 import {
   cancelReminder,
@@ -37,8 +36,8 @@ export default function EventDetailScreen(): React.JSX.Element {
         currentEvent.id === eventId || currentEvent.id === decodedEventId,
     ),
   );
-  const addEvent = useCalendarStore((state) => state.addEvent);
   const removeEvent = useCalendarStore((state) => state.removeEvent);
+  const updateStoreEvent = useCalendarStore((state) => state.updateEvent);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isBusy, setIsBusy] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -85,35 +84,24 @@ export default function EventDetailScreen(): React.JSX.Element {
     setStatusMessage("正在更新事件...");
 
     try {
-      const hasCalendarPermission = await requestCalendarPermission();
-      if (!hasCalendarPermission) {
-        setStatusMessage("请先授权日历权限");
-        return;
-      }
-
-      const nextEventId = await createEvent(updatedEvent);
-      const savedEvent: StoredCalendarEvent = {
-        ...updatedEvent,
-        id: nextEventId,
-      };
-
-      await deleteSystemEvent(event.id);
-      await cancelReminder(event.id);
-      removeEvent(event.id);
+      await updateEvent(event.id, updatedEvent);
 
       const hasNotificationPermission = await requestNotificationPermission();
       if (hasNotificationPermission) {
+        await cancelReminder(event.id);
         try {
-          await scheduleReminder(savedEvent, nextEventId);
+          await scheduleReminder(
+            { ...updatedEvent, id: event.id },
+            event.id,
+          );
         } catch {
           setStatusMessage("事件已更新，但提醒设置失败");
         }
       }
 
-      addEvent(savedEvent);
+      updateStoreEvent(event.id, updatedEvent);
       setIsEditing(false);
       setStatusMessage("事件已更新");
-      router.replace(`/event/${encodeURIComponent(nextEventId)}`);
     } catch {
       setStatusMessage("更新事件失败，请重试");
     } finally {

@@ -74,6 +74,34 @@ export async function deleteEvent(eventId: string): Promise<void> {
   await Calendar.deleteEventAsync(eventId);
 }
 
+export async function updateEvent(
+  eventId: string,
+  event: CalendarEvent,
+): Promise<void> {
+  const allDay = event.allDay || event.time === null;
+  const startDate = getEventStartDate(event);
+  const endDate = allDay
+    ? addDays(startDate, 1)
+    : addMinutes(startDate, getNormalizedDuration(event.duration));
+
+  await Calendar.updateEventAsync(eventId, {
+    title: event.title,
+    startDate,
+    endDate,
+    allDay,
+    alarms:
+      event.reminder_min > 0 && !allDay
+        ? [
+            {
+              relativeOffset: -event.reminder_min,
+              method: Calendar.AlarmMethod.ALERT,
+            },
+          ]
+        : [],
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+}
+
 export async function getEventsForMonth(
   year: number,
   month: number,

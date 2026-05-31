@@ -12,9 +12,20 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CalendarGrid } from "../src/components/CalendarGrid";
+import { EventConfirmCard } from "../src/components/EventConfirmCard";
 import { EventListItem } from "../src/components/EventListItem";
 import { useCalendar } from "../src/hooks/useCalendar";
+import {
+  createEvent as createSystemEvent,
+  requestCalendarPermission,
+} from "../src/services/calendar.service";
+import {
+  requestNotificationPermission,
+  scheduleReminder,
+} from "../src/services/notification.service";
+import { useCalendarStore } from "../src/stores/calendar.store";
 import type { StoredCalendarEvent } from "../src/stores/calendar.store";
+import type { CalendarEvent } from "../src/types";
 import { formatDate } from "../src/utils/date";
 
 export default function HomeScreen(): React.JSX.Element {
@@ -25,6 +36,9 @@ export default function HomeScreen(): React.JSX.Element {
   const [selectedDate, setSelectedDate] = useState<string>(formatDate(today));
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
+  const [isAddingEvent, setIsAddingEvent] = useState<boolean>(false);
+  const [addStatusMessage, setAddStatusMessage] = useState<string | null>(null);
+  const addEvent = useCalendarStore((state) => state.addEvent);
 
   const year = visibleMonth.getFullYear();
   const month = visibleMonth.getMonth() + 1;
@@ -43,6 +57,18 @@ export default function HomeScreen(): React.JSX.Element {
         .filter((event) => event.date === selectedDate)
         .sort(compareEventsByTime),
     [events, selectedDate],
+  );
+
+  const newEventTemplate = useMemo<CalendarEvent>(
+    () => ({
+      title: "",
+      date: selectedDate,
+      time: "09:00",
+      duration: 60,
+      reminder_min: 15,
+      allDay: false,
+    }),
+    [selectedDate],
   );
 
   const changeMonth = (offset: number): void => {
@@ -71,6 +97,42 @@ export default function HomeScreen(): React.JSX.Element {
       setOperationMessage("删除事件失败，请重试");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleAddEvent = async (event: CalendarEvent): Promise<void> => {
+    if (event.title.trim().length === 0) {
+      setAddStatusMessage("请输入事件标题");
+      return;
+    }
+
+    setAddStatusMessage("正在创建事件...");
+
+    try {
+      const hasCalendarPermission = await requestCalendarPermission();
+      if (!hasCalendarPermission) {
+        setAddStatusMessage("请先授权日历权限");
+        return;
+      }
+
+      const eventId = await createSystemEvent(event);
+      const savedEvent: StoredCalendarEvent = { ...event, id: eventId };
+
+      const hasNotificationPermission = await requestNotificationPermission();
+      if (hasNotificationPermission) {
+        try {
+          await scheduleReminder(event, eventId);
+        } catch {
+          // reminder failure is non-fatal
+        }
+      }
+
+      addEvent(savedEvent);
+      setIsAddingEvent(false);
+      setAddStatusMessage(null);
+      setOperationMessage("事件已创建");
+    } catch {
+      setAddStatusMessage("创建事件失败，请重试");
     }
   };
 
@@ -136,7 +198,18 @@ export default function HomeScreen(): React.JSX.Element {
                 </Text>
               </View>
 
-              {isLoading ? <ActivityIndicator color="#A78BFA" /> : null}
+              <View className="flex-row items-center gap-2">
+                {isLoading ? <ActivityIndicator color="#A78BFA" /> : null}
+                <Pressable
+                  className="h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 active:bg-white/10"
+                  onPress={(): void => {
+                    setAddStatusMessage(null);
+                    setIsAddingEvent(true);
+                  }}
+                >
+                  <Ionicons color="#E2E8F0" name="add" size={22} />
+                </Pressable>
+              </View>
             </View>
 
             {hasCalendarPermission === false ? (
@@ -182,7 +255,35 @@ export default function HomeScreen(): React.JSX.Element {
         >
           <Ionicons color="#FFFFFF" name="mic" size={28} />
         </Pressable>
+
+        <EventConfirmCard
+          event={newEventTemplate}
+          initialMode="editing"
+          onCancel={(): void => {
+            setIsAddingEvent(false);
+            setAddStatusMessage(null);
+          }}
+          onConfirm={(event): void => {
+            void handleAddEvent(event);
+          }}
+          visible={isAddingEvent}
+        />
       </View>
+
+      {addStatusMessage ? (
+        <View className="absolute bottom-28 left-5 right-5 rounded-2xl border border-white/10 bg-[#181426] px-5 py-4">
+          <Text
+            className={`text-sm ${
+              addStatusMessage.includes("失败") ||
+              addStatusMessage.includes("请输入")
+                ? "text-red-200"
+                : "text-slate-300"
+            }`}
+          >
+            {addStatusMessage}
+          </Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
