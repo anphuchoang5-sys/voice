@@ -97,6 +97,51 @@ export default function RecordScreen(): React.JSX.Element {
     [existingEvents, removeEvent],
   );
 
+  const handleBatchCreate = useCallback(
+    async (events: CalendarEvent[]): Promise<void> => {
+      setAppState("saving");
+      setCalendarMessage(`正在添加 ${events.length} 个事件...`);
+
+      try {
+        const hasCalendarPermission = await requestCalendarPermission();
+        if (!hasCalendarPermission) {
+          setCalendarMessage("未获得日历权限，无法写入系统日历");
+          return;
+        }
+
+        const hasNotificationPermission = await requestNotificationPermission();
+        const titles: string[] = [];
+        let reminderFailed = false;
+
+        for (const event of events) {
+          const eventId = await createEvent(event);
+          titles.push(event.title);
+          addEvent({ ...event, id: eventId });
+
+          if (hasNotificationPermission) {
+            try {
+              await scheduleReminder(event, eventId);
+            } catch {
+              reminderFailed = true;
+            }
+          }
+        }
+
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setConfirmedEvent(events[events.length - 1]);
+        setCalendarMessage(
+          `✅ 已添加 ${events.length} 个事件：${titles.join("、")}${reminderFailed ? "（部分提醒设置失败）" : ""}`,
+        );
+      } catch {
+        setCalendarMessage("写入日历失败，请重试");
+      } finally {
+        setParsedIntent(null);
+        setAppState("idle");
+      }
+    },
+    [addEvent],
+  );
+
   const handleQueryIntent = useCallback(
     (intent: VoiceIntent & { action: "query" }): void => {
       setParsedIntent(null);
@@ -119,9 +164,16 @@ export default function RecordScreen(): React.JSX.Element {
         const intent = await parseIntent(text, existingEvents);
 
         switch (intent.action) {
-          case "create":
-            setParsedIntent(intent);
+          case "create": {
+            if (intent.events.length === 1) {
+              setParsedIntent(intent);
+            } else if (intent.events.length > 1) {
+              void handleBatchCreate(intent.events);
+            } else {
+              setIntentError("未能识别事件信息，请重新描述");
+            }
             break;
+          }
           case "delete":
             setParsedIntent(intent);
             Alert.alert(
@@ -266,7 +318,9 @@ export default function RecordScreen(): React.JSX.Element {
               : displayText;
 
   const createEventData =
-    parsedIntent?.action === "create" ? parsedIntent.event : null;
+    parsedIntent?.action === "create" && parsedIntent.events.length === 1
+      ? parsedIntent.events[0]
+      : null;
 
   return (
     <SafeAreaView className="flex-1 bg-night">

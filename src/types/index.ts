@@ -11,7 +11,7 @@ export type CalendarEvent = {
 };
 
 export type VoiceIntent =
-  | { action: "create"; event: CalendarEvent }
+  | { action: "create"; events: CalendarEvent[] }
   | { action: "delete"; eventTitle: string; eventDate: string }
   | { action: "query"; date: string }
   | { action: "unknown" };
