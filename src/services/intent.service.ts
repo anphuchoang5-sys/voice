@@ -132,18 +132,45 @@ function normalizeVoiceIntent(value: unknown): VoiceIntent {
   }
 
   if (action === "delete") {
+    const rawTitles = Array.isArray(value.titles) ? value.titles : null;
+    if (rawTitles && rawTitles.length > 0) {
+      const titles: { eventTitle: string; eventDate: string }[] = [];
+      for (const t of rawTitles) {
+        if (
+          isObject(t) &&
+          typeof t.eventTitle === "string" &&
+          t.eventTitle.trim().length > 0 &&
+          typeof t.eventDate === "string" &&
+          isDateString(t.eventDate)
+        ) {
+          titles.push({
+            eventTitle: t.eventTitle.trim(),
+            eventDate: t.eventDate,
+          });
+        }
+      }
+      if (titles.length > 0) {
+        return { action: "delete", titles };
+      }
+    }
+  }
+
+  if (action === "update") {
     const eventTitle = value.eventTitle;
     const eventDate = value.eventDate;
+    const updatedEvent = normalizeCalendarEvent(value.updatedEvent);
     if (
       typeof eventTitle === "string" &&
       eventTitle.trim().length > 0 &&
       typeof eventDate === "string" &&
-      isDateString(eventDate)
+      isDateString(eventDate) &&
+      updatedEvent
     ) {
       return {
-        action: "delete",
+        action: "update",
         eventTitle: eventTitle.trim(),
         eventDate,
+        updatedEvent,
       };
     }
   }

@@ -65,6 +65,50 @@ export default function RecordScreen(): React.JSX.Element {
     async (intent: VoiceIntent & { action: "delete" }): Promise<void> => {
       setAppState("deleting");
 
+      const deleted: string[] = [];
+      const notFound: string[] = [];
+
+      for (const title of intent.titles) {
+        const match = existingEvents.find(
+          (event) =>
+            event.date === title.eventDate &&
+            event.title
+              .toLowerCase()
+              .includes(title.eventTitle.toLowerCase()),
+        );
+
+        if (match) {
+          try {
+            await deleteSystemEvent(match.id);
+            await cancelReminder(match.id).catch(() => {});
+            removeEvent(match.id);
+            deleted.push(match.title);
+          } catch {
+            // skip
+          }
+        } else {
+          notFound.push(`"${title.eventTitle}"`);
+        }
+      }
+
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      if (deleted.length > 0) {
+        const suffix =
+          notFound.length > 0 ? `（未找到 ${notFound.join("、")}）` : "";
+        setCalendarMessage(`已删除：${deleted.join("、")}${suffix}`);
+      } else {
+        setCalendarMessage("未找到匹配的事件");
+      }
+
+      setParsedIntent(null);
+      setAppState("idle");
+    },
+    [existingEvents, removeEvent],
+  );
+
+  const handleUpdateIntent = useCallback(
+    async (intent: VoiceIntent & { action: "update" }): Promise<void> => {
       const match = existingEvents.find(
         (event) =>
           event.date === intent.eventDate &&
@@ -85,16 +129,37 @@ export default function RecordScreen(): React.JSX.Element {
         await deleteSystemEvent(match.id);
         await cancelReminder(match.id).catch(() => {});
         removeEvent(match.id);
+
+        const hasCalendarPermission = await requestCalendarPermission();
+        if (!hasCalendarPermission) {
+          setCalendarMessage("未获得日历权限，无法修改事件");
+          return;
+        }
+
+        const eventId = await createEvent(intent.updatedEvent);
+        addEvent({ ...intent.updatedEvent, id: eventId });
+
+        const hasNotificationPermission = await requestNotificationPermission();
+        if (hasNotificationPermission) {
+          try {
+            await scheduleReminder(intent.updatedEvent, eventId);
+          } catch {
+            // reminder failure is non-fatal
+          }
+        }
+
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setCalendarMessage(`已删除「${match.title}」`);
+        setCalendarMessage(
+          `已将「${match.title}」改为「${intent.updatedEvent.title}」`,
+        );
       } catch {
-        setCalendarMessage("删除事件失败，请重试");
+        setCalendarMessage("修改事件失败，请重试");
       } finally {
         setParsedIntent(null);
         setAppState("idle");
       }
     },
-    [existingEvents, removeEvent],
+    [existingEvents, removeEvent, addEvent],
   );
 
   const handleBatchCreate = useCallback(
@@ -174,11 +239,14 @@ export default function RecordScreen(): React.JSX.Element {
             }
             break;
           }
-          case "delete":
+          case "delete": {
             setParsedIntent(intent);
+            const titleText = intent.titles
+              .map((t) => `「${t.eventTitle}」${t.eventDate}`)
+              .join("、");
             Alert.alert(
               "删除事件",
-              `要删除「${intent.eventTitle}」吗？`,
+              `要删除 ${titleText} 吗？`,
               [
                 { text: "取消", style: "cancel" },
                 {
@@ -190,6 +258,11 @@ export default function RecordScreen(): React.JSX.Element {
                 },
               ],
             );
+            break;
+          }
+          case "update":
+            setAppState("deleting");
+            void handleUpdateIntent(intent);
             break;
           case "query":
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
