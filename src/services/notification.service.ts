@@ -20,9 +20,12 @@ export async function requestNotificationPermission(): Promise<boolean> {
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
         name: "语音日历提醒",
-        importance: Notifications.AndroidImportance.DEFAULT,
+        importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: "#6C3CE1",
+        enableVibrate: true,
+        enableLights: true,
+        sound: "default",
       });
     }
 

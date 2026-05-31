@@ -182,9 +182,7 @@
 
 ## 阶段七记录
 
-EAS Build 成功，APK 已分发：
-- 第一次构建（无 API Key）：[APK](https://expo.dev/artifacts/eas/f9n8gq36qHAAKbBCtUNrbV.apk)
-- 第二次构建（生产环境 Key）：[APK](https://expo.dev/artifacts/eas/oAf2B5aBLpANSxSoAXrNu1.apk)
+EAS Build 曾成功产出 APK。下载链接不记录在仓库中，避免公开分发包和凭证风险。
 
 实机验证结果：Google ASR 在国行 Redmi 完全不可用。
 - 无 VPN：错误码 11（ERROR_SERVER_DISCONNECTED，GFW 拦截）
@@ -204,3 +202,13 @@ Google ASR 两条路都死，转讯飞 SparkChain SDK（原生 Android AAR）。
 5. 重写 `src/hooks/useVoice.ts`：改用 NativeModules.XfASR
 6. 卸载 `@react-native-voice/voice`
 7. EAS Build 重新构建
+## 2026-05-31 阶段八执行记录补充
+
+- 已从 `@react-native-voice/voice` 切换到讯飞 SparkChain ASR。
+- 已复制 `SparkChain.aar` 和 `Codec.aar` 到 `android/app/libs/`。
+- 已新增 Android Native Module：`XfASRModule.kt`、`XfASRPackage.kt`，并在 `MainApplication.kt` 注册。
+- 已重写 `src/hooks/useVoice.ts`，继续对外保持原 `useVoice` 接口。
+- 已通过 `npx tsc --noEmit`。
+- 已通过 `./gradlew.bat :app:compileDebugKotlin`。
+- 已通过本地 `./gradlew.bat :app:assembleRelease`，APK 输出到 `android/app/build/outputs/apk/release/app-release.apk`。
+- EAS Cloud 构建因会上传硬编码讯飞 demo 凭证到 Expo 外部服务，需用户明确确认风险后再执行。

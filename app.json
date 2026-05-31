@@ -16,7 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.voicecalendar.app",
+      "package": "com.seven.voicecalendar",
       "versionCode": 1,
       "permissions": [
         "android.permission.RECORD_AUDIO",
@@ -24,6 +24,7 @@
         "android.permission.WRITE_CALENDAR",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {

@@ -1,10 +1,13 @@
 import "../global.css";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Stack, router } from "expo-router";
 import * as QuickActions from "expo-quick-actions";
 import { useQuickActionCallback } from "expo-quick-actions/hooks";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+
+import { PermissionGuardDialog } from "../src/components/PermissionGuardDialog";
+import { usePermissionGuard } from "../src/hooks/usePermissionGuard";
 
 const RECORD_QUICK_ACTION: QuickActions.Action = {
   id: "voice-record",
@@ -32,6 +35,11 @@ async function configureQuickActions(): Promise<void> {
 }
 
 export default function RootLayout(): React.JSX.Element {
+  const [permDialogDismissed, setPermDialogDismissed] = useState(false);
+
+  const { missingPermissions, requestPermission, recheckPermissions } =
+    usePermissionGuard();
+
   const handleQuickAction = useCallback((action: QuickActions.Action): void => {
     if (getActionHref(action) === "/record") {
       setTimeout((): void => {
@@ -46,6 +54,16 @@ export default function RootLayout(): React.JSX.Element {
     void configureQuickActions();
   }, []);
 
+  // 用户重新打开 App 时（如从设置页返回），若权限已全部补齐则自动关闭弹窗
+  useEffect((): void => {
+    if (permDialogDismissed && missingPermissions.length === 0) {
+      setPermDialogDismissed(false);
+    }
+  }, [missingPermissions, permDialogDismissed]);
+
+  const showPermDialog =
+    missingPermissions.length > 0 && !permDialogDismissed;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack
@@ -54,6 +72,16 @@ export default function RootLayout(): React.JSX.Element {
           contentStyle: { backgroundColor: "#0F0F1A" },
         }}
       />
+
+      {showPermDialog && (
+        <PermissionGuardDialog
+          missingPermissions={missingPermissions}
+          onDismiss={() => setPermDialogDismissed(true)}
+          onRequest={async (def) => {
+            await requestPermission(def);
+          }}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }
