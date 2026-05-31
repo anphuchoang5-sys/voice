@@ -4,6 +4,16 @@ apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
+// 读取 local.properties 中的讯飞凭证（不提交 git）
+def localProps = new Properties()
+def localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def xfAppId     = localProps.getProperty("xf.appId",     "")
+def xfApiKey    = localProps.getProperty("xf.apiKey",    "")
+def xfApiSecret = localProps.getProperty("xf.apiSecret", "")
+
 static def versionToNumber(major, minor, patch) {
   return patch * 100 + minor * 10000 + major * 1000000
 }
@@ -110,12 +120,20 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.seven.voicecalendar'
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId 'com.seven.voicecalendar'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
+
+        // 注入讯飞凭证为 BuildConfig 字段
+        buildConfigField "String", "XF_APP_ID",     "\"${xfAppId}\""
+        buildConfigField "String", "XF_API_KEY",    "\"${xfApiKey}\""
+        buildConfigField "String", "XF_API_SECRET", "\"${xfApiSecret}\""
     }
     signingConfigs {
         debug {
@@ -166,9 +184,17 @@ android {
     }
 }
 
+repositories {
+    flatDir {
+        dirs 'libs'
+    }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation files('libs/SparkChain.aar')
+    implementation files('libs/Codec.aar')
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

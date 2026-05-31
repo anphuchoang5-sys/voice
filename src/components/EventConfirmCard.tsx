@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -73,7 +76,9 @@ export function EventConfirmCard({
   const [currentEvent, setCurrentEvent] = useState<CalendarEvent | null>(null);
   const [mode, setMode] = useState<ConfirmCardMode>("summary");
   const [fields, setFields] = useState<EditableEventFields | null>(null);
-  const translateY = useSharedValue<number>(360);
+
+  // 居中弹窗：用缩放 + 淡入代替底部滑入
+  const scale = useSharedValue<number>(0.92);
   const opacity = useSharedValue<number>(0);
   const contentOpacity = useSharedValue<number>(1);
   const contentTranslateY = useSharedValue<number>(0);
@@ -98,38 +103,39 @@ export function EventConfirmCard({
   useEffect((): void => {
     if (visible) {
       setIsMounted(true);
-      translateY.value = 360;
+      scale.value = 0.92;
       opacity.value = 0;
       requestAnimationFrame((): void => {
-        translateY.value = withTiming(0, {
-          duration: 260,
+        scale.value = withTiming(1, {
+          duration: 220,
           easing: Easing.out(Easing.cubic),
         });
-        opacity.value = withTiming(1, { duration: 200 });
+        opacity.value = withTiming(1, { duration: 180 });
       });
       return;
     }
 
     if (isMounted) {
-      translateY.value = withTiming(
-        360,
-        {
-          duration: 220,
-          easing: Easing.in(Easing.cubic),
-        },
+      scale.value = withTiming(
+        0.92,
+        { duration: 160, easing: Easing.in(Easing.cubic) },
         (finished) => {
           if (finished) {
             runOnJS(finishUnmount)();
           }
         },
       );
-      opacity.value = withTiming(0, { duration: 180 });
+      opacity.value = withTiming(0, { duration: 140 });
     }
-  }, [finishUnmount, isMounted, opacity, translateY, visible]);
+  }, [finishUnmount, isMounted, opacity, scale, visible]);
 
-  const sheetStyle = useAnimatedStyle(() => ({
+  const cardStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
+    transform: [{ scale: scale.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
   }));
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -202,25 +208,32 @@ export function EventConfirmCard({
   };
 
   return (
-    <View className="absolute inset-0 justify-end bg-black/45">
-      <Pressable className="flex-1" onPress={onCancel} />
+    <Modal
+      animationType="none"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+      transparent
+      visible={isMounted}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={16}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardView}
       >
-        <Animated.View
-          className="rounded-t-[32px] border border-white/10 bg-[#181426] px-6 pb-8 pt-6"
-          style={sheetStyle}
-        >
-          <View className="mb-5 h-1.5 w-12 self-center rounded-full bg-white/20" />
+        {/* 半透明遮罩 */}
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable style={styles.backdropPress} onPress={onCancel} />
+        </Animated.View>
 
-          <View className="flex-row items-start justify-between gap-4">
-            <View className="flex-1">
+        {/* 居中卡片 */}
+        <Animated.View style={[styles.card, cardStyle]}>
+          {/* 标题栏 */}
+          <View style={styles.cardHeader}>
+            <View style={{ flex: 1 }}>
               <Text className="text-xl font-semibold text-white">确认事件</Text>
-              <Text className="mt-2 text-sm leading-6 text-slate-300">
+              <Text className="mt-1 text-sm leading-5 text-slate-300">
                 {mode === "summary"
                   ? "检查识别结果，确认后写入系统日历。"
-                  : "调整字段后保存回确认页。"}
+                  : "调整字段后保存。"}
               </Text>
             </View>
             <Text className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-violetSoft">
@@ -228,138 +241,184 @@ export function EventConfirmCard({
             </Text>
           </View>
 
-          <Animated.View className="mt-5" style={contentStyle}>
-            {mode === "summary" ? (
-              <SummaryContent event={previewEvent} />
-            ) : (
-              <View className="gap-4">
-                <View>
-                  <Text className="mb-2 text-sm font-medium text-slate-300">
-                    标题
-                  </Text>
-                  <TextInput
-                    className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white"
-                    onChangeText={(value): void => updateField("title", value)}
-                    placeholder="事件标题"
-                    placeholderTextColor="#94A3B8"
-                    value={fields.title}
-                  />
-                </View>
-
-                <View className="flex-row gap-3">
-                  <View className="flex-1">
+          {/* 可滚动内容区域 */}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.scrollArea}
+          >
+            <Animated.View style={contentStyle}>
+              {mode === "summary" ? (
+                <SummaryContent event={previewEvent} />
+              ) : (
+                <View className="gap-4">
+                  <View>
                     <Text className="mb-2 text-sm font-medium text-slate-300">
-                      日期
+                      标题
                     </Text>
                     <TextInput
                       className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white"
-                      onChangeText={(value): void => updateField("date", value)}
-                      placeholder="YYYY-MM-DD"
+                      onChangeText={(value): void => updateField("title", value)}
+                      placeholder="事件标题"
                       placeholderTextColor="#94A3B8"
-                      value={fields.date}
+                      value={fields.title}
                     />
                   </View>
-                  <View className="w-28">
-                    <Text className="mb-2 text-sm font-medium text-slate-300">
-                      时间
-                    </Text>
-                    <TextInput
-                      className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white disabled:bg-white/5 disabled:text-slate-400"
-                      editable={!fields.allDay}
-                      onChangeText={(value): void => updateField("time", value)}
-                      placeholder="HH:MM"
-                      placeholderTextColor="#94A3B8"
-                      value={fields.time}
-                    />
+
+                  <View className="flex-row gap-3">
+                    <View className="flex-1">
+                      <Text className="mb-2 text-sm font-medium text-slate-300">
+                        日期
+                      </Text>
+                      <TextInput
+                        className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white"
+                        onChangeText={(value): void =>
+                          updateField("date", value)
+                        }
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor="#94A3B8"
+                        value={fields.date}
+                      />
+                    </View>
+                    <View className="w-28">
+                      <Text className="mb-2 text-sm font-medium text-slate-300">
+                        时间
+                      </Text>
+                      <TextInput
+                        className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white disabled:bg-white/5 disabled:text-slate-400"
+                        editable={!fields.allDay}
+                        onChangeText={(value): void =>
+                          updateField("time", value)
+                        }
+                        placeholder="HH:MM"
+                        placeholderTextColor="#94A3B8"
+                        value={fields.time}
+                      />
+                    </View>
+                  </View>
+
+                  <View className="flex-row items-end gap-3">
+                    <View className="flex-1">
+                      <Text className="mb-2 text-sm font-medium text-slate-300">
+                        提前提醒（分钟）
+                      </Text>
+                      <TextInput
+                        className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white"
+                        keyboardType="number-pad"
+                        onChangeText={(value): void =>
+                          updateField("reminderMin", value.replace(/\D/g, ""))
+                        }
+                        placeholder="15"
+                        placeholderTextColor="#94A3B8"
+                        value={fields.reminderMin}
+                      />
+                    </View>
+                    <Pressable
+                      className={`h-12 justify-center rounded-2xl border px-4 ${
+                        fields.allDay
+                          ? "border-violetSoft bg-violetDeep"
+                          : "border-white/10 bg-white/10"
+                      }`}
+                      onPress={(): void => updateField("allDay", !fields.allDay)}
+                    >
+                      <Text className="text-sm font-semibold text-white">
+                        {fields.allDay ? "全天开启" : "全天"}
+                      </Text>
+                    </Pressable>
                   </View>
                 </View>
+              )}
+            </Animated.View>
+          </ScrollView>
 
-                <View className="flex-row items-end gap-3">
-                  <View className="flex-1">
-                    <Text className="mb-2 text-sm font-medium text-slate-300">
-                      提前提醒（分钟）
-                    </Text>
-                    <TextInput
-                      className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-base text-white"
-                      keyboardType="number-pad"
-                      onChangeText={(value): void =>
-                        updateField("reminderMin", value.replace(/\D/g, ""))
-                      }
-                      placeholder="15"
-                      placeholderTextColor="#94A3B8"
-                      value={fields.reminderMin}
-                    />
-                  </View>
-                  <Pressable
-                    className={`h-12 justify-center rounded-2xl border px-4 ${
-                      fields.allDay
-                        ? "border-violetSoft bg-violetDeep"
-                        : "border-white/10 bg-white/10"
-                    }`}
-                    onPress={(): void => updateField("allDay", !fields.allDay)}
-                  >
-                    <Text className="text-sm font-semibold text-white">
-                      {fields.allDay ? "全天开启" : "全天"}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-          </Animated.View>
-
+          {/* 底部按钮 */}
           {mode === "summary" ? (
-            <View className="mt-6 flex-row gap-3">
+            <View className="mt-5 flex-row gap-3">
               <Pressable
-                className="h-14 items-center justify-center rounded-full border border-white/10 bg-white/10 px-2 active:opacity-80"
+                className="h-12 flex-1 items-center justify-center rounded-full border border-white/10 bg-white/10 active:opacity-70"
                 onPress={onCancel}
-                style={{ flex: 1 }}
               >
-                <Text className="text-base font-semibold text-slate-200">
-                  ❌ 取消
+                <Text className="text-sm font-semibold text-slate-200">
+                  取消
                 </Text>
               </Pressable>
               <Pressable
-                className="h-14 items-center justify-center rounded-full border border-violetSoft/40 bg-white/10 px-2 active:opacity-80"
+                className="h-12 flex-1 items-center justify-center rounded-full border border-violetSoft/40 bg-white/10 active:opacity-70"
                 onPress={(): void => switchMode("editing")}
-                style={{ flex: 1 }}
               >
-                <Text className="text-base font-semibold text-violetSoft">
+                <Text className="text-sm font-semibold text-violetSoft">
                   ✏️ 编辑
                 </Text>
               </Pressable>
               <Pressable
-                className="h-14 items-center justify-center rounded-full bg-violetDeep px-2 active:opacity-80"
+                className="h-12 items-center justify-center rounded-full bg-violetDeep px-5 active:opacity-70"
                 onPress={handleConfirm}
-                style={{ flex: 1.5 }}
               >
-                <Text className="text-base font-semibold text-white">
+                <Text className="text-sm font-semibold text-white">
                   ✅ 确认
                 </Text>
               </Pressable>
             </View>
           ) : (
-            <View className="mt-6 flex-row gap-3">
+            <View className="mt-5 flex-row gap-3">
               <Pressable
-                className="h-14 flex-1 items-center justify-center rounded-full border border-white/10 bg-white/10 active:opacity-80"
+                className="h-12 flex-1 items-center justify-center rounded-full border border-white/10 bg-white/10 active:opacity-70"
                 onPress={returnToSummary}
               >
-                <Text className="text-base font-semibold text-slate-200">
+                <Text className="text-sm font-semibold text-slate-200">
                   ← 返回
                 </Text>
               </Pressable>
               <Pressable
-                className="h-14 flex-1 items-center justify-center rounded-full bg-violetDeep active:opacity-80"
+                className="h-12 flex-1 items-center justify-center rounded-full bg-violetDeep active:opacity-70"
                 onPress={returnToSummary}
               >
-                <Text className="text-base font-semibold text-white">💾 保存</Text>
+                <Text className="text-sm font-semibold text-white">
+                  💾 保存
+                </Text>
               </Pressable>
             </View>
           )}
         </Animated.View>
       </KeyboardAvoidingView>
-    </View>
+    </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  keyboardView: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  backdropPress: {
+    flex: 1,
+  },
+  card: {
+    backgroundColor: "#181426",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+    maxHeight: "85%",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 16,
+  },
+  scrollArea: {
+    flexGrow: 0,
+  },
+});
 
 function SummaryContent({ event }: { event: CalendarEvent }): React.JSX.Element {
   const displayTime = event.allDay || event.time === null ? "全天" : event.time;

@@ -348,3 +348,11 @@ curl https://api.deepseek.com/chat/completions \
 ---
 
 *最后更新：2026-05-29 | 维护者：Codex*
+## 2026-05-31 阶段八执行记录补充
+
+- STT 已从 Google ASR 切换为讯飞 SparkChain ASR。
+- Native 集成路径：`android/app/libs/SparkChain.aar`、`android/app/libs/Codec.aar`、`XfASRModule.kt`、`XfASRPackage.kt`。
+- JS 接入点仍为 `src/hooks/useVoice.ts`，对 `record.tsx` 保持原接口不变。
+- 验证结果：`npx tsc --noEmit` 通过，`:app:compileDebugKotlin` 通过，`:app:assembleRelease` 通过。
+- 本地 APK：`android/app/build/outputs/apk/release/app-release.apk`。
+- EAS Cloud 构建暂未提交：当前 demo 凭证硬编码在 native 代码中，上传到外部云构建服务前需要用户明确确认。
