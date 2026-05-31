@@ -13,8 +13,8 @@
 ```
 长按图标 → 点"语音"快捷方式
 → App 直接打开进入录音界面
-→ 说话（Android 系统自动静音检测停止）
-→ Google ASR 实时转文字（边说边显示，无需上传文件）
+→ 说话（讯飞 VAD 静音 2 秒自动停止，或手动点停止）
+→ 讯飞 SparkChain ASR 实时转文字（边说边显示，无需上传文件）
 → DeepSeek 解析意图（时间/事件/提醒）
 → 确认卡弹出（摘要展示 + 三个按钮：取消 / 编辑 / 确认）
 → 点"编辑"进入编辑模式可修改字段
@@ -30,8 +30,8 @@
 |------|------|------|
 | 框架 | **Expo SDK 51 · Bare Workflow**（阶段六后） | TypeScript 模板，prebuild 后转 Bare |
 | 导航 | **expo-router v3** | 文件路由系统 |
-| 语音识别 | **@react-native-voice/voice** | 封装 Android 原生 SpeechRecognizer |
-| STT 引擎 | **Google ASR**（系统内置） | 无需 API Key，中文准确率高，实时流式 |
+| 语音识别 | **XfASRModule**（Kotlin Native Module） | 封装讯飞 SparkChain ASR，AudioRecord 采集 PCM |
+| STT 引擎 | **讯飞 SparkChain ASR**（SparkChain.aar） | 国内直连，中文准确率高，内置 VAD，实时流式 |
 | 意图解析 | **DeepSeek API** (`deepseek-chat`) | 中文理解最强之一 |
 | 系统日历 | **expo-calendar** | 读写手机原生日历 |
 | 本地通知 | **expo-notifications** | 事件提醒 |
@@ -504,26 +504,42 @@ EXPO_PUBLIC_DEEPSEEK_API_KEY=your_deepseek_api_key_here
 
 ## 快速参考：关键 API 调用
 
-### Android 原生 STT（@react-native-voice/voice）
+### 讯飞 SparkChain ASR（XfASR Native Module）
 ```typescript
-import Voice from '@react-native-voice/voice';
+import { NativeModules, NativeEventEmitter } from 'react-native';
+const { XfASR } = NativeModules;
+const emitter = new NativeEventEmitter(XfASR);
 
-// 注册回调（在 useEffect 里）
-Voice.onSpeechResults = (e) => {
-  const text = e.value?.[0] ?? '';  // 最终识别结果
-};
-Voice.onSpeechPartialResults = (e) => {
-  const partial = e.value?.[0] ?? '';  // 实时中间结果
-};
+// 注册回调
+emitter.addListener('onXfASRPartialResult', (e) => {
+  // e.text: 本段识别文字（需累积拼接）
+});
+emitter.addListener('onXfASRFinalResult', (e) => {
+  // e.text: 最后一段，status=2 后 SDK 自动停止
+});
+emitter.addListener('onXfASRError', (e) => {
+  // e.code, e.message
+});
 
-// 启动（zh-CN = 普通话）
-await Voice.start('zh-CN');
+// 启动（内部：AudioRecord 开始录音 + SparkChain ASR 开始会话）
+await XfASR.startListening();
 
-// 手动停止（系统也会自动在静音后停止）
-await Voice.stop();
+// 手动停止（讯飞 VAD 2 秒静默也会自动停止）
+await XfASR.stopListening();
+```
 
-// 清理
-await Voice.destroy();
+SparkChain SDK 核心 Java API（XfASRModule.kt 内部使用）：
+```java
+SparkChainConfig config = SparkChainConfig.builder()
+    .appID("42350800").apiKey("...").apiSecret("...").workDir(filesDir);
+SparkChain.getInst().init(context, config);
+
+ASR asr = new ASR();
+asr.language("zh_cn"); asr.domain("iat"); asr.accent("mandarin"); asr.vadEos(2000);
+asr.registerCallbacks(callbacks);
+asr.start("tag");
+asr.write(pcmBytes); // 每 40ms 送 1280 字节
+asr.stop(false);     // false = 等待最终结果
 ```
 
 ### DeepSeek 意图解析

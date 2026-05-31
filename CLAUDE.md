@@ -38,6 +38,14 @@
 - 代价：需要 `npx expo prebuild`，项目转 Bare Workflow，失去 Expo Go 兼容
 - 注意：在中国大陆需要 VPN 才能使用 Google ASR；部分国产 ROM 可能使用自家 ASR 引擎
 
+### 为什么阶段八换成讯飞 SparkChain ASR（放弃 Google ASR）
+- 实机验证（国行 Redmi）：Google ASR 完全不可用，无 VPN 报错码 11（服务器断开），有 VPN 报错码 12（不支持 zh-CN 语言包）
+- 讯飞 SparkChain SDK 是原生 Android AAR 库，内部自动处理 WebSocket + HMAC 鉴权，不需要手写签名
+- 使用标准 appID/apiKey/apiSecret 三件套，国内网络直连，无需 VPN
+- 流程：AudioRecord 采集 PCM → SparkChain ASR.write() → 回调返回识别文字，与 Google ASR 体验一致
+- SDK 文件放在 `android/app/libs/`，随 git 管理，EAS 云构建可以找到
+- 代价：需要讯飞开放平台账号和凭证，需写 Kotlin Native Module 桥接层
+
 ### 为什么用 DeepSeek（不是 Claude / GPT-4）
 - 日历意图解析是简单 NLP 任务，prompt 极短（< 100 token）
 - DeepSeek 中文理解能力强，成本约 ¥1/百万 token
@@ -61,7 +69,8 @@
 ```
 框架:     Expo SDK 51 (Bare Workflow，阶段六 prebuild 后) + TypeScript
 路由:     expo-router v3
-语音识别: @react-native-voice/voice → Android SpeechRecognizer → Google ASR
+语音识别: XfASR Native Module（Kotlin）→ 讯飞 SparkChain SDK → 讯飞 ASR 云端
+录音采集: Android AudioRecord（PCM 16kHz 16bit 单声道）
 意图解析: DeepSeek API (deepseek-chat) — https://platform.deepseek.com
 系统日历: expo-calendar
 通知提醒: expo-notifications
@@ -269,6 +278,8 @@ src/constants/
 | 2026-05-29 | 选择 Groq Whisper 而非原生 STT | 中文准确率更稳，Managed workflow 兼容 |
 | 2026-05-30 | 阶段六切换到 Android 原生 STT | Groq 在中国大陆无法注册，Google ASR 效果相当且零依赖 |
 | 2026-05-30 | 项目转 Bare Workflow（prebuild） | @react-native-voice/voice 需要原生模块，Expo Go 不再适用 |
+| 2026-05-31 | 阶段八切换到讯飞 SparkChain ASR | 实机验证 Google ASR 在国行 Redmi 完全不可用（错误码 11/12），讯飞国内直连稳定 |
+| 2026-05-31 | SparkChain SDK 放入 android/app/libs/ | EAS 云构建需要能找到 AAR 文件，随 git 管理比项目外更可靠 |
 | 2026-05-29 | 选择 DeepSeek 而非 Claude | 成本极低，中文意图解析够用 |
 | 2026-05-29 | Android 优先，暂不做 iOS | 快捷方式在 iOS 需要 WidgetKit，成本高 |
 | 2026-05-29 | 先不做桌面小组件 | App Shortcuts 足够满足便携性需求 |

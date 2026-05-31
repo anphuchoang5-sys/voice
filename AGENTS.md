@@ -22,11 +22,12 @@
 - Expo Go 可以在手机上秒级预览，不需要 Android Studio 或编译 APK
 - 72小时内完成可交付产品的最优路径
 
-### 为什么用 Groq Whisper（不是 Android 原生 SpeechRecognizer）
-- Android 原生 STT 需要 bare workflow + 原生模块，成本高
-- Groq 提供的 Whisper API 响应极快（接近实时），免费额度对黑客松够用
-- 中文准确率更稳定，不依赖手机系统语言包
-- 缺点：需要网络连接
+### 为什么阶段八切换到讯飞 SparkChain ASR（放弃 Google ASR）
+- 实机验证（国行 Redmi）：Google ASR 无 VPN 报错码 11（服务器断开），有 VPN 报错码 12（语言包缺失），两条路都死
+- 讯飞 SparkChain SDK 是 Android 原生 .aar 库，内部处理 WebSocket 连接和 HMAC 鉴权
+- 国内网络直连，中文普通话识别质量高，无需 VPN
+- 凭证三件套：appID / apiKey / apiSecret，与讯飞开放平台账号绑定
+- 通过 Kotlin Native Module（XfASRModule）桥接给 JS 层，JS 侧接口与原 useVoice 完全一致
 
 ### 为什么用 DeepSeek（不是 Codex / GPT-4）
 - 日历意图解析是简单 NLP 任务，prompt 极短（< 100 token）
@@ -49,10 +50,11 @@
 ## 技术栈速查
 
 ```
-框架:     Expo SDK 51 (Managed) + TypeScript
+框架:     Expo SDK 51 (Bare Workflow) + TypeScript
 路由:     expo-router v3
-录音:     expo-av
-STT:      Groq API (whisper-large-v3) — https://console.groq.com
+录音采集: Android AudioRecord（在 XfASRModule.kt 内，PCM 16kHz 16bit 单声道）
+STT:      讯飞 SparkChain SDK（android/app/libs/SparkChain.aar + Codec.aar）
+STT桥接:  XfASRModule.kt + XfASRPackage.kt（Kotlin Native Module）
 意图解析: DeepSeek API (deepseek-chat) — https://platform.deepseek.com
 系统日历: expo-calendar
 通知提醒: expo-notifications
@@ -67,11 +69,11 @@ STT:      Groq API (whisper-large-v3) — https://console.groq.com
 
 ## 环境配置
 
-### 必需的 API Keys
-| Key | 获取地址 | 免费额度 |
-|-----|---------|---------|
-| `GROQ_API_KEY` | https://console.groq.com | 有免费额度 |
-| `DEEPSEEK_API_KEY` | https://platform.deepseek.com | 注册送余额 |
+### 必需的 API Keys / 凭证
+| Key | 获取地址 | 说明 |
+|-----|---------|------|
+| `EXPO_PUBLIC_DEEPSEEK_API_KEY` | https://platform.deepseek.com | 意图解析，注册送余额 |
+| 讯飞 appID / apiKey / apiSecret | https://console.xfyun.cn | STT，硬编码在 XfASRModule.kt（hackathon 用） |
 
 ### .env 文件位置
 ```
@@ -107,14 +109,26 @@ app/
   event/[id].tsx     ← 事件详情/编辑
 
 src/services/
-  stt.service.ts     ← 唯一与 Groq 通信的地方
   intent.service.ts  ← 唯一与 DeepSeek 通信的地方
   calendar.service.ts← 所有 expo-calendar 操作封装
   notification.service.ts ← 所有通知逻辑
 
+src/hooks/
+  useVoice.ts        ← 语音识别 Hook，基于 XfASR Native Module
+  useCalendar.ts     ← 日历操作 Hook
+
 src/constants/
   prompts.ts         ← DeepSeek 系统提示词（集中管理，方便调优）
   config.ts          ← API 端点、模型名、超时等常量
+
+android/app/
+  libs/
+    SparkChain.aar   ← 讯飞 SparkChain SDK 主库
+    Codec.aar        ← 讯飞编解码库
+  src/main/java/com/seven/voicecalendar/
+    XfASRModule.kt   ← Native Module：录音 + ASR 桥接
+    XfASRPackage.kt  ← 注册 XfASRModule 到 React Native
+    MainApplication.kt ← 注册 XfASRPackage
 ```
 
 ---
@@ -168,12 +182,13 @@ src/constants/
 | 阶段 | 状态 | 完成时间 | 主要产出 |
 |------|------|---------|---------|
 | 阶段一：基础 + UI | ✅ 已完成 | 2026-05-29 | Expo SDK 51 初始化、依赖安装、NativeWind/expo-router/quick actions 配置、录音 UI |
-| 阶段二：录音 + STT | ⚠️ 代码完成，待实机/API 验证 | 2026-05-29 | useRecording、Groq STT service、录音页转写链路 |
-| 阶段三：意图解析 | ✅ 已完成 | 2026-05-29 | CalendarEvent、prompt、DeepSeek fetch service、EventConfirmCard、录音页解析链路；DeepSeek 临时实测通过 |
-| 阶段四：日历写入 | ⬜ 未开始 | — | — |
-| 阶段五：App 日历视图 | ⬜ 未开始 | — | — |
-| 阶段六：完善 | ⬜ 未开始 | — | — |
-| 阶段七：打包 | ⬜ 未开始 | — | — |
+| 阶段二：录音 + STT | ✅ 已完成 | 2026-05-29 | useRecording、Groq STT service（后续废弃）、录音页转写链路 |
+| 阶段三：意图解析 | ✅ 已完成 | 2026-05-29 | CalendarEvent、prompt、DeepSeek fetch service、EventConfirmCard；DeepSeek 实测通过 |
+| 阶段四：日历写入 | ✅ 已完成 | 2026-05-29 | calendar.service、notification.service、Zustand store、写入系统日历 + 提醒 |
+| 阶段五：App 日历视图 | ✅ 已完成 | 2026-05-30 | 月历主页、CalendarGrid、EventListItem、事件详情/编辑页 |
+| 阶段六：切换原生 STT | ✅ 已完成 | 2026-05-30 | 删除 Groq STT，接入 @react-native-voice/voice + Google ASR，prebuild 转 Bare Workflow |
+| 阶段七：打包 | ✅ 已完成 | 2026-05-30 | EAS Build 配置，APK 构建成功，DeepSeek API Key 写入 EAS 生产环境 |
+| 阶段八：切换讯飞 ASR | 🚧 进行中 | 2026-05-31 | 删除 @react-native-voice/voice，接入 SparkChain AAR，写 XfASRModule Native Module |
 
 ---
 

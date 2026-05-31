@@ -11,8 +11,9 @@
 | 阶段三：意图解析 | 已完成 | 2026-05-29 | 已提交：实现阶段三意图解析 | DeepSeek 临时实测通过，Key 未写入文件 |
 | 阶段四：写入日历 + 提醒 | 代码完成，待实机验证 | 2026-05-29 | 本次提交：完成阶段四日历写入与提醒 | 日历/通知权限需 Android 真机确认 |
 | 阶段五：App 内日历视图 | 代码完成，待实机验证 | 2026-05-30 | 本次提交：完成阶段五 App 内日历视图 | 左滑删除和系统同步需 Android 真机确认 |
-| 阶段六：原生语音识别切换 | 代码完成，待 dev APK 验证 | 2026-05-30 | 本次提交：切换阶段六原生语音识别 | 已从 Groq STT 切到 Android SpeechRecognizer |
-| 阶段七：打包 + 演示准备 | 未开始 | - | - | - |
+| 阶段六：原生语音识别切换 | ✅ 已完成 | 2026-05-30 | 切换阶段六原生语音识别 | 从 Groq STT 切到 Android SpeechRecognizer（Google ASR） |
+| 阶段七：打包 + 演示准备 | ✅ 已完成 | 2026-05-30 | EAS Build 配置完成 | APK 构建成功，DeepSeek Key 写入 EAS 生产环境 |
+| 阶段八：切换讯飞 SparkChain ASR | 🚧 进行中 | 2026-05-31 | — | Google ASR 国行不可用，切换讯飞原生 SDK + Kotlin Native Module |
 
 ## 阶段一记录
 
@@ -178,3 +179,28 @@
 ### 待实机验证
 
 - 需要构建 dev APK 验证 Google ASR 可用性、中文识别效果、静音自动结束和实时 partial 文本表现。
+
+## 阶段七记录
+
+EAS Build 成功，APK 已分发：
+- 第一次构建（无 API Key）：[APK](https://expo.dev/artifacts/eas/f9n8gq36qHAAKbBCtUNrbV.apk)
+- 第二次构建（生产环境 Key）：[APK](https://expo.dev/artifacts/eas/oAf2B5aBLpANSxSoAXrNu1.apk)
+
+实机验证结果：Google ASR 在国行 Redmi 完全不可用。
+- 无 VPN：错误码 11（ERROR_SERVER_DISCONNECTED，GFW 拦截）
+- 有 VPN：错误码 12（ERROR_LANGUAGE_NOT_SUPPORTED，设备缺 zh-CN 语言包）
+→ 决定阶段八切换讯飞 SparkChain ASR
+
+## 阶段八记录（进行中）
+
+### 背景
+Google ASR 两条路都死，转讯飞 SparkChain SDK（原生 Android AAR）。
+
+### 计划
+1. 复制 `SparkChain.aar` + `Codec.aar` 到 `android/app/libs/`
+2. 修改 `android/app/build.gradle`：加 flatDir + implementation files
+3. 新建 `XfASRModule.kt`（Native Module）+ `XfASRPackage.kt`
+4. 修改 `MainApplication.kt`：注册 XfASRPackage
+5. 重写 `src/hooks/useVoice.ts`：改用 NativeModules.XfASR
+6. 卸载 `@react-native-voice/voice`
+7. EAS Build 重新构建
