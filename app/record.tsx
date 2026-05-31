@@ -1,8 +1,8 @@
 import * as Haptics from "expo-haptics";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EventConfirmCard } from "../src/components/EventConfirmCard";
@@ -11,17 +11,20 @@ import { WaveformAnimation } from "../src/components/WaveformAnimation";
 import { useVoice } from "../src/hooks/useVoice";
 import {
   createEvent,
+  deleteEvent as deleteSystemEvent,
   requestCalendarPermission,
 } from "../src/services/calendar.service";
 import { parseIntent } from "../src/services/intent.service";
 import {
+  cancelReminder,
   requestNotificationPermission,
   scheduleReminder,
 } from "../src/services/notification.service";
 import { useCalendarStore } from "../src/stores/calendar.store";
-import type { CalendarEvent, RecordingStatus } from "../src/types";
+import type { StoredCalendarEvent } from "../src/stores/calendar.store";
+import type { CalendarEvent, RecordingStatus, VoiceIntent } from "../src/types";
 
-type RecordAppState = "idle" | "parsing" | "saving";
+type RecordAppState = "idle" | "parsing" | "saving" | "deleting";
 
 const TRANSCRIPT_PLACEHOLDER = "点击录音按钮，说出要加入日历的事情。";
 
@@ -35,10 +38,12 @@ export default function RecordScreen(): React.JSX.Element {
   const [appState, setAppState] = useState<RecordAppState>("idle");
   const [intentError, setIntentError] = useState<string | null>(null);
   const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
-  const [parsedEvent, setParsedEvent] = useState<CalendarEvent | null>(null);
+  const [parsedIntent, setParsedIntent] = useState<VoiceIntent | null>(null);
   const [confirmedEvent, setConfirmedEvent] = useState<CalendarEvent | null>(null);
   const lastParsedTextRef = useRef<string | null>(null);
   const addEvent = useCalendarStore((state) => state.addEvent);
+  const removeEvent = useCalendarStore((state) => state.removeEvent);
+  const existingEvents = useCalendarStore((state) => state.events);
 
   const {
     voiceState,
@@ -56,25 +61,100 @@ export default function RecordScreen(): React.JSX.Element {
         ? "recording"
         : "idle";
 
-  const parseFinalText = useCallback(async (text: string): Promise<void> => {
-    setAppState("parsing");
-    setIntentError(null);
-    setCalendarMessage(null);
-    setParsedEvent(null);
+  const handleDeleteIntent = useCallback(
+    async (intent: VoiceIntent & { action: "delete" }): Promise<void> => {
+      setAppState("deleting");
 
-    try {
-      const event = await parseIntent(text);
-      if (event) {
-        setParsedEvent(event);
-      } else {
-        setIntentError("未能识别事件信息，请重新描述");
+      const match = existingEvents.find(
+        (event) =>
+          event.date === intent.eventDate &&
+          event.title
+            .toLowerCase()
+            .includes(intent.eventTitle.toLowerCase()),
+      );
+
+      if (!match) {
+        setIntentError(
+          `未找到 ${intent.eventDate} 的"${intent.eventTitle}"相关事件`,
+        );
+        setAppState("idle");
+        return;
       }
-    } catch {
-      setIntentError("未能识别事件信息，请重新描述");
-    } finally {
-      setAppState("idle");
-    }
-  }, []);
+
+      try {
+        await deleteSystemEvent(match.id);
+        await cancelReminder(match.id).catch(() => {});
+        removeEvent(match.id);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setCalendarMessage(`已删除「${match.title}」`);
+      } catch {
+        setCalendarMessage("删除事件失败，请重试");
+      } finally {
+        setParsedIntent(null);
+        setAppState("idle");
+      }
+    },
+    [existingEvents, removeEvent],
+  );
+
+  const handleQueryIntent = useCallback(
+    (intent: VoiceIntent & { action: "query" }): void => {
+      setParsedIntent(null);
+      router.replace({
+        pathname: "/",
+        params: { focusDate: intent.date },
+      });
+    },
+    [],
+  );
+
+  const parseFinalText = useCallback(
+    async (text: string): Promise<void> => {
+      setAppState("parsing");
+      setIntentError(null);
+      setCalendarMessage(null);
+      setParsedIntent(null);
+
+      try {
+        const intent = await parseIntent(text, existingEvents);
+
+        switch (intent.action) {
+          case "create":
+            setParsedIntent(intent);
+            break;
+          case "delete":
+            setParsedIntent(intent);
+            Alert.alert(
+              "删除事件",
+              `要删除「${intent.eventTitle}」吗？`,
+              [
+                { text: "取消", style: "cancel" },
+                {
+                  text: "删除",
+                  style: "destructive",
+                  onPress: (): void => {
+                    void handleDeleteIntent(intent);
+                  },
+                },
+              ],
+            );
+            break;
+          case "query":
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            handleQueryIntent(intent);
+            break;
+          case "unknown":
+            setIntentError("未能识别事件信息，请重新描述");
+            break;
+        }
+      } catch {
+        setIntentError("未能识别事件信息，请重新描述");
+      } finally {
+        setAppState("idle");
+      }
+    },
+    [existingEvents, handleDeleteIntent, handleQueryIntent],
+  );
 
   useEffect((): void => {
     const normalizedFinalText = finalText?.trim();
@@ -94,7 +174,7 @@ export default function RecordScreen(): React.JSX.Element {
       lastParsedTextRef.current = null;
       setIntentError(null);
       setCalendarMessage(null);
-      setParsedEvent(null);
+      setParsedIntent(null);
       setConfirmedEvent(null);
       void startListening();
       return;
@@ -106,7 +186,7 @@ export default function RecordScreen(): React.JSX.Element {
   };
 
   const handleCancelEvent = (): void => {
-    setParsedEvent(null);
+    setParsedIntent(null);
   };
 
   const handleConfirmEvent = (event: CalendarEvent): void => {
@@ -121,7 +201,7 @@ export default function RecordScreen(): React.JSX.Element {
       const hasCalendarPermission = await requestCalendarPermission();
       if (!hasCalendarPermission) {
         setCalendarMessage("未获得日历权限，无法写入系统日历");
-        setParsedEvent(null);
+        setParsedIntent(null);
         return;
       }
 
@@ -146,7 +226,7 @@ export default function RecordScreen(): React.JSX.Element {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       addEvent(savedEvent);
       setConfirmedEvent(savedEvent);
-      setParsedEvent(null);
+      setParsedIntent(null);
       setIntentError(null);
       setCalendarMessage(`✅ 已加入日历${reminderMessage}`);
     } catch {
@@ -167,7 +247,9 @@ export default function RecordScreen(): React.JSX.Element {
 
   const hasDisplayError =
     Boolean(voiceError ?? intentError) ||
-    (calendarMessage?.includes("失败") === true && !calendarMessage.startsWith("✅")) ||
+    (calendarMessage?.includes("失败") === true &&
+      !calendarMessage.startsWith("✅") &&
+      !calendarMessage.startsWith("已删除")) ||
     calendarMessage?.includes("未获得") === true;
 
   const transcriptText =
@@ -179,7 +261,12 @@ export default function RecordScreen(): React.JSX.Element {
           ? "正在解析事件信息..."
           : appState === "saving"
             ? "正在写入系统日历..."
-            : displayText;
+            : appState === "deleting"
+              ? "正在删除事件..."
+              : displayText;
+
+  const createEventData =
+    parsedIntent?.action === "create" ? parsedIntent.event : null;
 
   return (
     <SafeAreaView className="flex-1 bg-night">
@@ -201,7 +288,9 @@ export default function RecordScreen(): React.JSX.Element {
         </View>
 
         <View className="flex-1 items-center justify-center">
-          <Text className="mb-8 text-base text-slate-300">{STATUS_HINTS[status]}</Text>
+          <Text className="mb-8 text-base text-slate-300">
+            {STATUS_HINTS[status]}
+          </Text>
           <View className="h-56 w-56 items-center justify-center">
             <WaveformAnimation isActive={voiceState === "listening"} />
             <RecordButton status={status} onPress={handleToggleRecording} />
@@ -214,7 +303,7 @@ export default function RecordScreen(): React.JSX.Element {
               ? "环境安静约 2 秒会自动停止，也可以再次点击停止"
               : status === "processing"
                 ? "正在把语音整理成日历事件"
-                : "长按桌面图标选择语音记录，也会直达这个页面"}
+                : "试试说「明天下午三点开会」「删除明天下午的会议」「后天有什么安排」"}
           </Text>
         </View>
 
@@ -236,10 +325,10 @@ export default function RecordScreen(): React.JSX.Element {
       </View>
 
       <EventConfirmCard
-        event={parsedEvent}
+        event={createEventData}
         onCancel={handleCancelEvent}
         onConfirm={handleConfirmEvent}
-        visible={parsedEvent !== null}
+        visible={createEventData !== null}
       />
     </SafeAreaView>
   );

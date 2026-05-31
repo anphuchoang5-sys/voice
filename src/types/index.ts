@@ -9,3 +9,9 @@ export type CalendarEvent = {
   reminder_min: number;
   allDay: boolean;
 };
+
+export type VoiceIntent =
+  | { action: "create"; event: CalendarEvent }
+  | { action: "delete"; eventTitle: string; eventDate: string }
+  | { action: "query"; date: string }
+  | { action: "unknown" };

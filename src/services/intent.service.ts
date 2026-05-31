@@ -5,7 +5,8 @@ import {
   REQUEST_TIMEOUT_MS,
 } from "../constants/config";
 import { createIntentSystemPrompt } from "../constants/prompts";
-import type { CalendarEvent } from "../types";
+import type { StoredCalendarEvent } from "../stores/calendar.store";
+import type { CalendarEvent, VoiceIntent } from "../types";
 
 type DeepSeekMessage = {
   role: "system" | "user" | "assistant";
@@ -105,28 +106,77 @@ function normalizeCalendarEvent(value: unknown): CalendarEvent | null {
   };
 }
 
-function parseCalendarEvent(content: string): CalendarEvent | null {
+function normalizeVoiceIntent(value: unknown): VoiceIntent {
+  if (!isObject(value)) {
+    return { action: "unknown" };
+  }
+
+  const { action } = value;
+
+  if (action === "create") {
+    const event = normalizeCalendarEvent(value.event);
+    if (event) {
+      return { action: "create", event };
+    }
+  }
+
+  if (action === "delete") {
+    const eventTitle = value.eventTitle;
+    const eventDate = value.eventDate;
+    if (
+      typeof eventTitle === "string" &&
+      eventTitle.trim().length > 0 &&
+      typeof eventDate === "string" &&
+      isDateString(eventDate)
+    ) {
+      return {
+        action: "delete",
+        eventTitle: eventTitle.trim(),
+        eventDate,
+      };
+    }
+  }
+
+  if (action === "query") {
+    const date = value.date;
+    if (typeof date === "string" && isDateString(date)) {
+      return { action: "query", date };
+    }
+  }
+
+  return { action: "unknown" };
+}
+
+function parseVoiceIntent(content: string): VoiceIntent {
   const jsonText = extractJsonText(content);
 
   if (jsonText === "null") {
-    return null;
+    return { action: "unknown" };
   }
 
-  const parsed: unknown = JSON.parse(jsonText);
-  return normalizeCalendarEvent(parsed);
+  try {
+    const parsed: unknown = JSON.parse(jsonText);
+    return normalizeVoiceIntent(parsed);
+  } catch {
+    return { action: "unknown" };
+  }
 }
 
 /**
- * 使用 DeepSeek 从语音转写文本中解析日历事件意图。
+ * 使用 DeepSeek 从语音转写文本中解析用户日历意图。
  *
  * @param text 用户语音转写后的中文文本。
- * @returns 解析成功时返回 CalendarEvent；信息不足、接口异常或 JSON 不合法时返回 null。
+ * @param existingEvents 当前月份已有的日历事件。
+ * @returns VoiceIntent — create / delete / query / unknown。
  */
-export async function parseIntent(text: string): Promise<CalendarEvent | null> {
+export async function parseIntent(
+  text: string,
+  existingEvents: StoredCalendarEvent[] = [],
+): Promise<VoiceIntent> {
   try {
     const trimmedText = text.trim();
     if (!trimmedText || isPlaceholderApiKey(DEEPSEEK_API_KEY)) {
-      return null;
+      return { action: "unknown" };
     }
 
     const controller = new AbortController();
@@ -143,7 +193,10 @@ export async function parseIntent(text: string): Promise<CalendarEvent | null> {
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
         messages: [
-          { role: "system", content: createIntentSystemPrompt() },
+          {
+            role: "system",
+            content: createIntentSystemPrompt(new Date(), existingEvents),
+          },
           { role: "user", content: trimmedText },
         ],
         temperature: 0.1,
@@ -154,18 +207,18 @@ export async function parseIntent(text: string): Promise<CalendarEvent | null> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return null;
+      return { action: "unknown" };
     }
 
     const payload = parseDeepSeekPayload(await response.json());
     const content = payload.choices?.[0]?.message?.content;
 
     if (!content) {
-      return null;
+      return { action: "unknown" };
     }
 
-    return parseCalendarEvent(content);
+    return parseVoiceIntent(content);
   } catch {
-    return null;
+    return { action: "unknown" };
   }
 }
